@@ -217,12 +217,15 @@ if st.button("Inizia sessione"):
     st.session_state["session_id"] = sess["id"]
     st.session_state["quiz_items"] = []
     st.session_state["answers"] = {}
+    st.session_state["in_progress"] = True
 
-    # genera domande
-    batch_payload = []
+    # genera quiz UNA VOLTA SOLA
     for _ in range(int(n_questions)):
         t = random.choice(selected_topics)
-        q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
+        q, opts, correct, expl = build_mcq_from_source(
+            t["argomento"], t["fonte_testo"]
+        )
+
         payload = {
             "session_id": sess["id"],
             "topic_id": t["id"],
@@ -235,17 +238,12 @@ if st.button("Inizia sessione"):
             "chosen_option": None,
             "explanation": expl,
         }
+
         sb.table("quiz_answers").insert(payload).execute()
         st.session_state["quiz_items"].append(payload)
 
-    if include_case:
-        tcase = random.choice(selected_topics)
-        st.session_state["case_topic"] = tcase
-        st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
-        st.session_state["case_answer"] = ""
+    st.experimental_rerun()
 
-    st.session_state["in_progress"] = True
-    st.rerun()
 
 
 # Session in progress
