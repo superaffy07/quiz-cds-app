@@ -203,48 +203,52 @@ with tabs[0]:
 
         if st.button("Inizia sessione"):
             # create session
-            topic_scope = "single" if scope == "Un solo argomento" else "all"
-            selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
-            sess = sb.table("sessions").insert({
-                "student_id": student["id"],
-                "mode": "mix" if include_case else "quiz",
-                "topic_scope": topic_scope,
-                "selected_topic_id": selected_topic_id,
-                "n_questions": int(n_questions),
-            }).execute().data[0]
+    topic_scope = "single" if scope == "Un solo argomento" else "all"
+    selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
 
-            st.session_state["session_id"] = sess["id"]
-            st.session_state["quiz_items"] = []
-            st.session_state["answers"] = {}
+    sess = sb.table("sessions").insert({
+        "student_id": student["id"],
+        "mode": "mix" if include_case else "quiz",
+        "topic_scope": topic_scope,
+        "selected_topic_id": selected_topic_id,
+        "n_questions": int(n_questions),
+    }).execute().data[0]
 
-            # generate quiz items now and store in DB
-            for _ in range(int(n_questions)):
-                t = random.choice(selected_topics)
-                q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
-                payload = {
-                    "session_id": sess["id"],
-                    "topic_id": t["id"],
-                    "question_text": q,
-                    "option_a": opts[0],
-                    "option_b": opts[1],
-                    "option_c": opts[2],
-                    "option_d": opts[3],
-                    "correct_option": correct,
-                    "chosen_option": None,
-                    "explanation": expl,
-                }
-                sb.table("quiz_answers").insert(payload).execute()
-                st.session_state["quiz_items"].append(payload)
+    st.session_state["session_id"] = sess["id"]
+    st.session_state["quiz_items"] = []
+    st.session_state["answers"] = {}
 
-            # practical case (generated but not graded until end)
-            if include_case:
-                tcase = random.choice(selected_topics)
-                st.session_state["case_topic"] = tcase
-                st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
-                st.session_state["case_answer"] = ""
+    # ✅ genera domande in memoria
+    batch_payload = []
+    for _ in range(int(n_questions)):
+        t = random.choice(selected_topics)
+        q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
+        payload = {
+            "session_id": sess["id"],
+            "topic_id": t["id"],
+            "question_text": q,
+            "option_a": opts[0],
+            "option_b": opts[1],
+            "option_c": opts[2],
+            "option_d": opts[3],
+            "correct_option": correct,
+            "chosen_option": None,
+            "explanation": expl,
+        }
+        batch_payload.append(payload)
+        st.session_state["quiz_items"].append(payload)
 
-            st.session_state["in_progress"] = True
-            st.rerun()
+    # ✅ UNA SOLA insert (evita blocco)
+    sb.table("quiz_answers").insert(batch_payload).execute()
+
+    if include_case:
+        tcase = random.choice(selected_topics)
+        st.session_state["case_topic"] = tcase
+        st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
+        st.session_state["case_answer"] = ""
+
+    st.session_state["in_progress"] = True
+    st.success("Sessione creata ✅ Scorri sotto per le domande.")
 
         # Session in progress
         if st.session_state.get("in_progress"):
