@@ -202,9 +202,9 @@ with tabs[0]:
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
         if st.button("Inizia sessione"):
-            # create session
-            topic_scope = "single" if scope == "Un solo argomento" else "all"
-            selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
+    # create session
+    topic_scope = "single" if scope == "Un solo argomento" else "all"
+    selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
 
     sess = sb.table("sessions").insert({
         "student_id": student["id"],
@@ -249,6 +249,7 @@ with tabs[0]:
 
     st.session_state["in_progress"] = True
     st.success("Sessione creata ✅ Scorri sotto per le domande.")
+    st.rerun()
 
         # Session in progress
         if st.session_state.get("in_progress"):
