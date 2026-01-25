@@ -201,13 +201,31 @@ if st.session_state.get("logged"):
     n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
     include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
-    if st.button("Inizia sessione"):
-        # qui sotto deve iniziare la tua logica di creazione sessione
-        pass
+if st.button("Inizia sessione"):
+    st.session_state["session_id"] = "TEST_SESSION"
+    st.session_state["quiz_items"] = []
+    st.session_state["answers"] = {}
+    st.session_state["in_progress"] = True
+
+    # genera quiz BASE (senza DB, senza Supabase)
+    for _ in range(n_questions):
+        t = random.choice(selected_topics)
+        q, opts, correct, expl = build_mcq_from_source(
+            t["argomento"], t["fonte_testo"]
+        )
+        st.session_state["quiz_items"].append({
+            "question_text": q,
+            "option_a": opts[0],
+            "option_b": opts[1],
+            "option_c": opts[2],
+            "option_d": opts[3],
+            "correct_option": correct,
+            "explanation": expl
+        })
 
 # Session in progress
-    if st.session_state.get("in_progress"):
-            st.subheader("Sessione in corso (correzione alla fine)")
+if st.session_state.get("in_progress"):
+    st.subheader("Sessione in corso (correzione alla fine)")
             quiz_items = st.session_state["quiz_items"]
 
             for idx, item in enumerate(quiz_items, start=1):
