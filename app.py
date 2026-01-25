@@ -179,83 +179,31 @@ with tabs[0]:
             st.session_state["student"] = upsert_student(class_code.strip(), nickname.strip())
             st.session_state["logged"] = True
             st.success("Accesso OK ✅")
+if st.session_state.get("logged"):
+    student = st.session_state["student"]
+    st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
 
-    if st.session_state.get("logged"):
-        student = st.session_state["student"]
-        st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
+    topics = fetch_topics()
+    if not topics:
+        st.error("Nessun argomento disponibile nel database. Carica prima il CSV nella sezione Docente.")
+        st.stop()
 
-        topics = fetch_topics()
-if not topics:
-    st.error("Nessun argomento disponibile nel database. Carica prima il CSV nella sezione Docente.")
-    st.stop()
+    scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
 
-scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
+    if scope == "Un solo argomento":
+        labels = [f"{t['id']} - {t['argomento']}" for t in topics]
+        chosen = st.selectbox("Seleziona argomento", labels)
+        chosen_id = int(chosen.split(" - ")[0])
+        selected_topics = [t for t in topics if t["id"] == chosen_id]
+    else:
+        selected_topics = topics
 
-if scope == "Un solo argomento":
-    labels = [f"{t['id']} - {t['argomento']}" for t in topics]
-    chosen = st.selectbox("Seleziona argomento", labels)
-    chosen_id = int(chosen.split(" - ")[0])
-    selected_topics = [t for t in topics if t["id"] == chosen_id]
-else:
-    selected_topics = topics
+    n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
+    include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
-
-        n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
-        include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
-
-import time
-
-if st.button("Inizia sessione"):
-    # create session
-    topic_scope = "single" if scope == "Un solo argomento" else "all"
-    selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
-
-    sess = sb.table("sessions").insert({
-        "student_id": student["id"],
-        "mode": "mix" if include_case else "quiz",
-        "topic_scope": topic_scope,
-        "selected_topic_id": selected_topic_id,
-        "n_questions": int(n_questions),
-    }).execute().data[0]
-
-    st.session_state["session_id"] = sess["id"]
-    st.session_state["quiz_items"] = []
-    st.session_state["answers"] = {}
-    st.session_state["in_progress"] = True
-
-    # =========================
-    # GENERAZIONE QUIZ (QUI DENTRO!)
-    # =========================
-    for _ in range(int(n_questions)):
-        t = random.choice(selected_topics)
-        q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
-
-        payload = {
-            "session_id": sess["id"],
-            "topic_id": t["id"],
-            "question_text": q,
-            "option_a": opts[0],
-            "option_b": opts[1],
-            "option_c": opts[2],
-            "option_d": opts[3],
-            "correct_option": correct,
-            "chosen_option": None,
-            "explanation": expl,
-        }
-
-        sb.table("quiz_answers").insert(payload).execute()
-        st.session_state["quiz_items"].append(payload)
-
-    # Caso pratico (opzionale)
-    if include_case:
-        tcase = random.choice(selected_topics)
-        st.session_state["case_topic"] = tcase
-        st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
-        st.session_state["case_answer"] = ""
-
-    # forza refresh UI e passa alla schermata quiz
-    st.rerun()
-
+    if st.button("Inizia sessione"):
+        # qui sotto deve iniziare la tua logica di creazione sessione
+        pass
 
 # Session in progress
     if st.session_state.get("in_progress"):
