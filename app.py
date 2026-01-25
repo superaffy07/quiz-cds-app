@@ -186,10 +186,7 @@ with tabs[0]:
 
         topics = fetch_topics()
         if not topics:
-            st.warning("Nessun argomento nel DB. Il docente deve caricare un CSV nell’area Docente.")
-            st.stop()
-
-        scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
+            scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
         if scope == "Un solo argomento":
             labels = [f"{t['id']} - {t['argomento']}" for t in topics]
             chosen = st.selectbox("Seleziona argomento", labels)
@@ -226,6 +223,38 @@ if st.button("Inizia sessione"):
     st.session_state["answers"] = {}
     st.session_state["in_progress"] = True
     st.info("STEP 4: session_state ok")
+# =========================
+# GENERAZIONE QUIZ
+# =========================
+for _ in range(int(n_questions)):
+    t = random.choice(selected_topics)
+    q, opts, correct, expl = build_mcq_from_source(
+        t["argomento"], t["fonte_testo"]
+    )
+
+    payload = {
+        "session_id": sess["id"],
+        "topic_id": t["id"],
+        "question_text": q,
+        "option_a": opts[0],
+        "option_b": opts[1],
+        "option_c": opts[2],
+        "option_d": opts[3],
+        "correct_option": correct,
+        "chosen_option": None,
+        "explanation": expl,
+    }
+
+    sb.table("quiz_answers").insert(payload).execute()
+    st.session_state["quiz_items"].append(payload)
+
+# Caso pratico
+if include_case:
+    tcase = random.choice(selected_topics)
+    st.session_state["case_topic"] = tcase
+    st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
+    st.session_state["case_answer"] = ""
+
 
     st.warning("STOP QUI: se vedi questo, Supabase è OK e il blocco è nella generazione quiz")
     st.stop()
