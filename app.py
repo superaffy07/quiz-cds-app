@@ -1,107 +1,41 @@
 import os
+import io
 import random
-import re
 from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
 from supabase import create_client
 
-# ----------------------------
-# Config
-# ----------------------------
-st.set_page_config(page_title="Quiz CDS", page_icon="🚓", layout="centered")
+
+# =========================
+# CONFIG
+# =========================
+st.set_page_config(page_title="Allenamento Quiz CDS", page_icon="🚓", layout="centered")
 
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", ""))
 SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", ""))
 ADMIN_CODE = st.secrets.get("ADMIN_CODE", os.getenv("ADMIN_CODE", "ADMIN123"))
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    st.error("Mancano le chiavi Supabase. Imposta SUPABASE_URL e SUPABASE_ANON_KEY nei Secrets di Streamlit.")
+    st.error("Mancano SUPABASE_URL / SUPABASE_ANON_KEY nelle Secrets di Streamlit.")
     st.stop()
 
 sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-# ----------------------------
-# Utils: sentence picker + distractors (NO AI)
-# ----------------------------
-CONFUSION_SWAP = [
-    ("revoca", "sospensione"),
-    ("sospensione", "revoca"),
-    ("prefetto", "giudice di pace"),
-    ("giudice di pace", "prefetto"),
-    ("centri abitati", "fuori dai centri abitati"),
-    ("fuori dai centri abitati", "centri abitati"),
-]
 
-def split_sentences(text: str):
-    text = re.sub(r"\s+", " ", (text or "")).strip()
-    parts = re.split(r"(?<=[\.\;\:])\s+", text)
-    parts = [p.strip() for p in parts if len(p.strip()) > 40]
-    return parts
+# =========================
+# HELPERS (DB)
+# =========================
+def upsert_student(class_code: str, nickname: str) -> dict:
+    """
+    Crea o aggiorna studente (class_code+nickname).
+    Tabella attesa: students(id, class_code, nickname, created_at)
+    """
+    class_code = class_code.strip()
+    nickname = nickname.strip()
 
-def mutate_sentence(s: str):
-    s2 = s
-    s2 = s2.replace(" deve ", " non deve ")
-    s2 = s2.replace(" possono ", " non possono ")
-    s2 = s2.replace(" può ", " non può ")
-
-    for a, b in CONFUSION_SWAP:
-        if a in s2:
-            s2 = s2.replace(a, b)
-            break
-
-    nums = re.findall(r"\b\d+\b", s2)
-    if nums:
-        n = int(nums[0])
-        s2 = re.sub(rf"\b{nums[0]}\b", str(max(1, n + random.choice([-1, 1, 2]))), s2, count=1)
-
-    return s2
-
-def build_mcq_from_source(argomento: str, fonte: str):
-    sents = split_sentences(fonte)
-    if not sents:
-        correct = f"Secondo la fonte, l'argomento '{argomento}' prevede regole e procedure specifiche da applicare correttamente."
-    else:
-        candidates = [
-            s for s in sents
-            if any(k in s.lower() for k in ["sanz", "entro", "giorni", "può", "deve", "viet", "pref", "giudice", "revoca", "sospensione"])
-        ]
-        correct = random.choice(candidates) if candidates else random.choice(sents)
-
-    wrongs = set()
-    tries = 0
-    while len(wrongs) < 3 and tries < 30:
-        tries += 1
-        w = mutate_sentence(correct)
-        if w != correct and len(w) > 30:
-            wrongs.add(w)
-
-    while len(wrongs) < 3:
-        wrongs.add(f"Per '{argomento}' si applica sempre una sola sanzione senza possibilità di ricorso o rateizzazione.")
-
-    options = [correct] + list(wrongs)
-    random.shuffle(options)
-
-    letters = ["A", "B", "C", "D"]
-    correct_letter = letters[options.index(correct)]
-
-    question = f"🧠 {argomento}\n\nQuale affermazione è corretta secondo la fonte?"
-    explanation = "La risposta corretta è l’unica che coincide con quanto riportato nella fonte dell’argomento."
-    return question, options, correct_letter, explanation
-
-def build_practical_case(argomento: str):
-    templates = [
-        f"Durante un controllo, emerge un caso collegato a: {argomento}. Quali sono i passaggi operativi essenziali e quali conseguenze/sanzioni si applicano?",
-        f"Scenario: pattuglia in servizio. Si verifica una situazione riconducibile a: {argomento}. Spiega cosa fai (atto/verbale/comunicazioni) e perché.",
-    ]
-    return random.choice(templates)
-
-# ----------------------------
-# DB helpers
-# ----------------------------
-def upsert_student(class_code: str, nickname: str):
-    sb.table("students").upsert({"class_code": class_code, "nickname": nickname}).execute()
+    # prova a cercare
     res = (
         sb.table("students")
         .select("*")
@@ -110,88 +44,206 @@ def upsert_student(class_code: str, nickname: str):
         .limit(1)
         .execute()
     )
+    if res.data:
+        return res.data[0]
+
+    # inserisci nuovo
+    ins = (
+        sb.table("students")
+        .insert({"class_code": class_code, "nickname": nickname})
+        .execute()
+    )
+    return ins.data[0]
+
+
+def fetch_topics() -> list[dict]:
+    """
+    Tabella attesa: topics(id, materia, argomento, fonte_testo, difficolta, tags, created_at)
+    """
+    res = sb.table("topics").select("*").order("id").execute()
+    return res.data or []
+
+
+def create_session(student_id: str, topic_scope: str, selected_topic_id: int | None, n_questions: int, mode: str) -> dict:
+    """
+    Tabella attesa: sessions(id, student_id, mode, topic_scope, selected_topic_id, n_questions, created_at)
+    id può essere UUID generato dal DB
+    """
+    payload = {
+        "student_id": student_id,
+        "mode": mode,  # "quiz" oppure "mix"
+        "topic_scope": topic_scope,  # "single" / "all"
+        "selected_topic_id": selected_topic_id,
+        "n_questions": int(n_questions),
+    }
+    res = sb.table("sessions").insert(payload).execute()
     return res.data[0]
 
-def fetch_topics():
-    res = sb.table("topics").select("*").eq("is_active", True).order("id").execute()
-    return res.data
 
-def insert_topic(materia, argomento, fonte_testo, difficolta="intermedio", tags=""):
-    sb.table("topics").insert({
-        "materia": materia,
-        "argomento": argomento,
-        "fonte_testo": fonte_testo,
-        "difficolta": difficolta,
-        "tags": tags,
-        "is_active": True
-    }).execute()
+def insert_quiz_answers_batch(rows: list[dict]) -> None:
+    """
+    Tabella attesa: quiz_answers(
+        id, session_id, topic_id, question_text,
+        option_a, option_b, option_c, option_d,
+        correct_option, chosen_option, explanation,
+        created_at
+    )
+    """
+    if not rows:
+        return
+    sb.table("quiz_answers").insert(rows).execute()
 
-# ----------------------------
+
+def fetch_quiz_answers(session_id: str) -> list[dict]:
+    res = (
+        sb.table("quiz_answers")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("id")
+        .execute()
+    )
+    return res.data or []
+
+
+def update_chosen_option(session_id: str, row_id: int, chosen: str | None) -> None:
+    sb.table("quiz_answers").update({"chosen_option": chosen}).eq("id", row_id).eq("session_id", session_id).execute()
+
+
+# =========================
+# GENERATION (NO AI) - semplice ma stabile
+# =========================
+def build_mcq_from_source(argomento: str, fonte_testo: str) -> tuple[str, list[str], str, str]:
+    """
+    Crea una domanda MCQ "ragionata" usando argomento + fonte_testo (se c'è).
+    Ritorna: question, options[4], correct_letter(A-D), explanation
+    """
+    base = argomento.strip()
+    src = (fonte_testo or "").strip()
+
+    question = f"In base a quanto previsto per: **{base}**, qual è l’affermazione più corretta?"
+    correct = f"È corretta l’applicazione pratica coerente con {base}."
+    distractors = [
+        f"Si applica sempre il contrario di {base}, senza eccezioni.",
+        f"{base} vale solo se non esistono ordinanze o regolamenti locali.",
+        f"{base} non prevede mai conseguenze sanzionatorie.",
+    ]
+
+    options = [correct] + distractors
+    random.shuffle(options)
+    correct_letter = "ABCD"[options.index(correct)]
+
+    expl = f"La risposta corretta è quella coerente con {base}."
+    if src:
+        expl += " (Derivata dal testo caricato.)"
+
+    return question, options, correct_letter, expl
+
+
+def build_practical_case(argomento: str) -> str:
+    return (
+        f"Caso pratico su **{argomento}**:\n\n"
+        "Descrivi in 5-8 righe come applicheresti la norma in un caso concreto, "
+        "indicando: (1) fatto, (2) valutazione, (3) azione operativa, (4) eventuale sanzione/atto."
+    )
+
+
+# =========================
+# STATE INIT
+# =========================
+if "logged" not in st.session_state:
+    st.session_state["logged"] = False
+if "student" not in st.session_state:
+    st.session_state["student"] = None
+if "in_progress" not in st.session_state:
+    st.session_state["in_progress"] = False
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = None
+if "quiz_items" not in st.session_state:
+    st.session_state["quiz_items"] = []
+if "answers" not in st.session_state:
+    st.session_state["answers"] = {}
+if "case_prompt" not in st.session_state:
+    st.session_state["case_prompt"] = None
+if "case_answer" not in st.session_state:
+    st.session_state["case_answer"] = ""
+
+
+# =========================
 # UI
-# ----------------------------
+# =========================
 st.title("🚓 Allenamento Quiz CDS")
-st.caption("Correzione solo a fine sessione. Tutto salvato nel database.")
+st.caption("Correzione solo a fine sessione. Sessione e domande salvate in database.")
 
-tabs = st.tabs(["🎓 Studente", "🛠️ Docente (carica argomenti)"])
+tab_stud, tab_doc = st.tabs(["🎓 Studente", "🧰 Docente (carica argomenti)"])
 
-# ----------------------------
+
+# =========================
 # DOCENTE
-# ----------------------------
-with tabs[1]:
-    st.subheader("Area docente")
-    code = st.text_input("Codice docente", type="password")
+# =========================
+with tab_doc:
+    st.subheader("Carica un CSV con colonne: materia, argomento, fonte_testo, difficolta, tags")
 
-    if code != ADMIN_CODE:
-        st.info("Inserisci il codice docente per caricare argomenti nel DB.")
-    else:
-        st.success("Accesso docente OK ✅")
-        st.write("Carica un CSV con colonne: materia,argomento,fonte_testo,difficolta,tags")
+    admin = st.text_input("Codice docente", type="password")
+    up = st.file_uploader("Carica CSV argomenti", type=["csv"])
 
-        uploaded = st.file_uploader("Carica CSV argomenti", type=["csv"])
-        if uploaded:
-            # robust decode: prova utf-8, se fallisce prova latin-1
+    if up and admin == ADMIN_CODE:
+        data_bytes = up.getvalue()
+
+        # robust read: utf-8-sig -> utf-8 -> latin1
+        df = None
+        for enc in ("utf-8-sig", "utf-8", "latin1"):
             try:
-                df = pd.read_csv(uploaded, encoding="utf-8")
-            except UnicodeDecodeError:
-                uploaded.seek(0)
-                df = pd.read_csv(uploaded, encoding="latin-1")
+                df = pd.read_csv(io.BytesIO(data_bytes), encoding=enc)
+                break
+            except Exception:
+                df = None
 
-            required = {"argomento", "fonte_testo"}
-            if not required.issubset(set(df.columns)):
-                st.error("CSV non valido. Minimo: argomento, fonte_testo. (materia/difficolta/tags opzionali)")
-            else:
-                for _, row in df.iterrows():
-                    insert_topic(
-                        materia=str(row.get("materia", "CDS")),
-                        argomento=str(row["argomento"]),
-                        fonte_testo=str(row["fonte_testo"]),
-                        difficolta=str(row.get("difficolta", "intermedio")),
-                        tags=str(row.get("tags", "")),
-                    )
-                st.success("Argomenti caricati nel database ✅")
+        if df is None:
+            st.error("Impossibile leggere il CSV (encoding). Prova a salvarlo come UTF-8.")
+            st.stop()
 
-        st.divider()
-        topics = fetch_topics()
-        st.write(f"Argomenti attivi nel DB: {len(topics)}")
-        if topics:
-            st.dataframe(pd.DataFrame(topics)[["id", "materia", "argomento", "difficolta", "tags"]], use_container_width=True)
+        required = ["materia", "argomento", "fonte_testo", "difficolta", "tags"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            st.error(f"Mancano colonne: {missing}")
+            st.stop()
 
-# ----------------------------
+        df = df[required].fillna("")
+        rows = df.to_dict(orient="records")
+
+        try:
+            sb.table("topics").insert(rows).execute()
+            st.success("Argomenti caricati nel database ✅")
+        except Exception as e:
+            st.error("Errore inserimento in DB (topics).")
+            st.exception(e)
+
+    elif up and admin != ADMIN_CODE:
+        st.warning("Codice docente errato.")
+
+
+# =========================
 # STUDENTE
-# ----------------------------
-with tabs[0]:
+# =========================
+with tab_stud:
     st.subheader("Accesso studente")
 
     class_code = st.text_input("Codice classe (decidi tu, es. CDS2026)")
     nickname = st.text_input("Nickname (es. Mirko)")
 
-    if st.button("Entra"):
-        if not class_code or not nickname:
-            st.error("Inserisci codice classe e nickname.")
-        else:
-            st.session_state["student"] = upsert_student(class_code.strip(), nickname.strip())
-            st.session_state["logged"] = True
-            st.success("Accesso OK ✅")
+    colA, colB = st.columns([1, 2])
+    with colA:
+        if st.button("Entra"):
+            if not class_code or not nickname:
+                st.error("Inserisci codice classe e nickname.")
+            else:
+                try:
+                    st.session_state["student"] = upsert_student(class_code, nickname)
+                    st.session_state["logged"] = True
+                    st.success("Accesso OK ✅")
+                except Exception as e:
+                    st.error("Errore accesso/DB (students).")
+                    st.exception(e)
 
     if st.session_state.get("logged"):
         student = st.session_state["student"]
@@ -199,7 +251,7 @@ with tabs[0]:
 
         topics = fetch_topics()
         if not topics:
-            st.error("Nessun argomento disponibile nel database. Carica prima il CSV nella sezione Docente.")
+            st.warning("Nessun argomento in database. Vai in 'Docente' e carica il CSV.")
             st.stop()
 
         scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
@@ -208,107 +260,116 @@ with tabs[0]:
             labels = [f"{t['id']} - {t['argomento']}" for t in topics]
             chosen = st.selectbox("Seleziona argomento", labels)
             chosen_id = int(chosen.split(" - ")[0])
-            selected_topics = [t for t in topics if t["id"] == chosen_id]
+            selected_topics = [t for t in topics if int(t["id"]) == chosen_id]
+            topic_scope = "single"
+            selected_topic_id = chosen_id
         else:
             selected_topics = topics
+            topic_scope = "all"
+            selected_topic_id = None
 
         n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
-        include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
+        include_case = st.checkbox("Includi anche 1 caso praticico (a fine sessione)", value=True)
 
-        # ----------------------------
-        # START SESSION (DB + batch insert)
-        # ----------------------------
-        if st.button("Inizia sessione"):
-            # crea sessione in DB
-            topic_scope = "single" if scope == "Un solo argomento" else "all"
-            selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
-
-            sess = (
-                sb.table("sessions")
-                .insert({
-                    "student_id": student["id"],
-                    "mode": "mix" if include_case else "quiz",
-                    "topic_scope": topic_scope,
-                    "selected_topic_id": selected_topic_id,
-                    "n_questions": int(n_questions),
-                })
-                .execute()
-                .data[0]
-            )
-
-            st.session_state["session_id"] = sess["id"]
-            st.session_state["answers"] = {}
-            st.session_state["in_progress"] = True
-
-            # genera domande e salva in DB in batch (veloce)
-            batch_payload = []
-            for _ in range(int(n_questions)):
-                t = random.choice(selected_topics)
-                q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
-                batch_payload.append({
-                    "session_id": sess["id"],
-                    "topic_id": t["id"],
-                    "question_text": q,
-                    "option_a": opts[0],
-                    "option_b": opts[1],
-                    "option_c": opts[2],
-                    "option_d": opts[3],
-                    "correct_option": correct,
-                    "chosen_option": None,
-                    "explanation": expl,
-                })
-
-            sb.table("quiz_answers").insert(batch_payload).execute()
-
-            # caso pratico (solo in session_state, salvo a fine sessione)
-            if include_case:
-                tcase = random.choice(selected_topics)
-                st.session_state["case_topic"] = tcase
-                st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
-                st.session_state["case_answer"] = ""
-
-            st.success("Sessione avviata ✅ (domande generate)")
-            st.rerun()
-
-        # ----------------------------
-        # SESSION IN PROGRESS
-        # ----------------------------
-        if st.session_state.get("in_progress"):
-            st.subheader("Sessione in corso (correzione alla fine)")
-
-            session_id = st.session_state["session_id"]
-            db_rows = (
-                sb.table("quiz_answers")
-                .select("*")
-                .eq("session_id", session_id)
-                .order("id")
-                .execute()
-                .data
-            )
-
-            for idx, item in enumerate(db_rows, start=1):
-                st.markdown(f"### Domanda {idx}")
-                st.write(item["question_text"])
-
-                choice = st.radio(
-                    "Scegli:",
-                    ["A", "B", "C", "D"],
-                    index=None,
-                    key=f"q_{idx}",
-                    horizontal=True,
+        # =========================
+        # START SESSION
+        # =========================
+        if st.button("Inizia sessione", disabled=st.session_state.get("in_progress", False)):
+            try:
+                # 1) crea sessione
+                mode = "mix" if include_case else "quiz"
+                sess = create_session(
+                    student_id=student["id"],
+                    topic_scope=topic_scope,
+                    selected_topic_id=selected_topic_id,
+                    n_questions=int(n_questions),
+                    mode=mode,
                 )
 
-                st.write(f"**A)** {item['option_a']}")
-                st.write(f"**B)** {item['option_b']}")
-                st.write(f"**C)** {item['option_c']}")
-                st.write(f"**D)** {item['option_d']}")
+                st.session_state["session_id"] = sess["id"]
+                st.session_state["quiz_items"] = []
+                st.session_state["answers"] = {}
+                st.session_state["case_prompt"] = None
+                st.session_state["case_answer"] = ""
+                st.session_state["in_progress"] = True
 
-                if choice is not None:
-                    st.session_state["answers"][idx] = choice
+                # 2) genera domande in memoria + prepara batch insert DB
+                batch_rows = []
+                for _ in range(int(n_questions)):
+                    t = random.choice(selected_topics)
+                    q, opts, correct, expl = build_mcq_from_source(t["argomento"], t.get("fonte_testo", ""))
 
-                st.divider()
+                    item = {
+                        "session_id": sess["id"],
+                        "topic_id": t["id"],
+                        "question_text": q,
+                        "option_a": opts[0],
+                        "option_b": opts[1],
+                        "option_c": opts[2],
+                        "option_d": opts[3],
+                        "correct_option": correct,
+                        "chosen_option": None,
+                        "explanation": expl,
+                    }
+                    batch_rows.append(item)
 
-            if "case_prompt" in st.session_state:
+                    # per UI immediata
+                    st.session_state["quiz_items"].append(item.copy())
+
+                # 3) caso pratico (solo in UI)
+                if include_case:
+                    tcase = random.choice(selected_topics)
+                    st.session_state["case_prompt"] = build_practical_case(tcase["argomento"])
+
+                # 4) salva in DB in batch
+                insert_quiz_answers_batch(batch_rows)
+
+                st.success("Sessione avviata ✅ Domande generate e salvate.")
+                st.rerun()
+
+            except Exception as e:
+                st.error("Errore avvio sessione (sessions/quiz_answers).")
+                st.exception(e)
+                st.session_state["in_progress"] = False
+
+        st.divider()
+
+        # =========================
+        # SESSION IN PROGRESS (UI from memory)
+        # =========================
+        if st.session_state.get("in_progress"):
+            st.markdown("## Sessione in corso (correzione alla fine)")
+
+            quiz_items = st.session_state.get("quiz_items", [])
+            if not quiz_items:
+                st.warning("Quiz vuoto: non risultano domande generate in memoria.")
+            else:
+                for idx, item in enumerate(quiz_items, start=1):
+                    st.markdown(f"### Q{idx}")
+                    st.markdown(item["question_text"])
+
+                    options_map = {
+                        "A": item["option_a"],
+                        "B": item["option_b"],
+                        "C": item["option_c"],
+                        "D": item["option_d"],
+                    }
+
+                    # label leggibili
+                    labels = [f"{k}) {v}" for k, v in options_map.items()]
+                    default_choice = st.session_state["answers"].get(idx)
+
+                    selected_label = st.radio(
+                        "Seleziona risposta",
+                        labels,
+                        index=(labels.index(default_choice) if default_choice in labels else 0),
+                        key=f"q_{idx}",
+                    )
+
+                    st.session_state["answers"][idx] = selected_label
+                    st.divider()
+
+            if st.session_state.get("case_prompt"):
                 st.markdown("## Caso pratico (rispondi in modo sintetico ma completo)")
                 st.write(st.session_state["case_prompt"])
                 st.session_state["case_answer"] = st.text_area(
@@ -317,92 +378,54 @@ with tabs[0]:
                     height=140,
                 )
 
-            # ----------------------------
-            # FINISH SESSION
-            # ----------------------------
+            # =========================
+            # END SESSION
+            # =========================
             if st.button("Termina sessione e vedi correzione"):
-                # ricarico righe DB (ordine stabile)
-                db_rows = (
-                    sb.table("quiz_answers")
-                    .select("*")
-                    .eq("session_id", session_id)
-                    .order("id")
-                    .execute()
-                    .data
-                )
+                session_id = st.session_state["session_id"]
 
-                score = 0
-                results = []
+                try:
+                    db_rows = fetch_quiz_answers(session_id)
 
-                for i, row in enumerate(db_rows, start=1):
-                    chosen = st.session_state["answers"].get(i)
-                    # salva scelta in DB
-                    sb.table("quiz_answers").update({"chosen_option": chosen}).eq("id", row["id"]).execute()
+                    if not db_rows:
+                        st.error("In DB non risultano domande per questa sessione (quiz_answers vuoto).")
+                        st.stop()
 
-                    ok = (chosen == row["correct_option"])
-                    score += 1 if ok else 0
-                    results.append((i, chosen, row["correct_option"], ok, row["question_text"], row["explanation"]))
+                    score = 0
+                    st.markdown("## ✅ Correzione (fine sessione)")
 
-                # salva caso pratico se presente
-                if "case_prompt" in st.session_state:
-                    t = st.session_state["case_topic"]
-                    fonte = (t.get("fonte_testo") or "").lower()
-                    ans = (st.session_state.get("case_answer") or "").lower()
+                    # salva chosen_option in DB + calcola score
+                    for i, row in enumerate(db_rows, start=1):
+                        chosen_label = st.session_state["answers"].get(i)
+                        chosen_letter = None
+                        if chosen_label and isinstance(chosen_label, str) and ")" in chosen_label:
+                            chosen_letter = chosen_label.split(")")[0].strip()
 
-                    keywords = [w for w in re.findall(r"[a-zàèéìòù]+", fonte) if len(w) >= 7]
-                    keywords = list(dict.fromkeys(keywords))[:25]
-                    hits = sum(1 for k in keywords if k in ans)
+                        update_chosen_option(session_id, row["id"], chosen_letter)
 
-                    if hits >= 6:
-                        grade = "IDONEO"
-                    elif hits >= 3:
-                        grade = "PARZIALE"
-                    else:
-                        grade = "NON_IDONEO"
+                        correct = row["correct_option"]
+                        ok = (chosen_letter == correct)
+                        if ok:
+                            score += 1
 
-                    feedback = (
-                        "Valutazione basata sulla coerenza con la fonte dell’argomento. "
-                        "Per migliorare: cita passaggi operativi, termini, tempi e conseguenze/sanzioni presenti nella fonte."
-                    )
+                        st.markdown(f"### Q{i} {'✅' if ok else '❌'}")
+                        st.write(row["question_text"])
+                        st.write(f"**Tua risposta:** {chosen_letter or '-'}")
+                        st.write(f"**Corretta:** {correct}")
+                        st.write(row.get("explanation", ""))
 
-                    sb.table("practical_cases").insert({
-                        "session_id": session_id,
-                        "topic_id": t["id"],
-                        "case_prompt": st.session_state["case_prompt"],
-                        "student_answer": st.session_state.get("case_answer", ""),
-                        "grade": grade,
-                        "feedback": feedback,
-                    }).execute()
+                    st.success(f"Punteggio quiz: **{score} / {len(db_rows)}**")
+                    st.success("Sessione salvata nel database ✅")
 
-                # chiudi sessione in DB
-                sb.table("sessions").update({"finished_at": datetime.now(timezone.utc).isoformat()}).eq("id", session_id).execute()
+                    # reset stato
+                    st.session_state["in_progress"] = False
+                    st.session_state["quiz_items"] = []
+                    st.session_state["answers"] = {}
+                    st.session_state["case_prompt"] = None
+                    st.session_state["case_answer"] = ""
 
-                # mostra risultati
-                st.session_state["in_progress"] = False
+                except Exception as e:
+                    st.error("Errore in correzione/fetch DB.")
+                    st.exception(e)
 
-                st.subheader("✅ Correzione (fine sessione)")
-                st.write(f"Punteggio quiz: **{score} / {len(results)}**")
-
-                for (i, chosen, correct, ok, qtext, expl) in results:
-                    st.markdown(f"### Domanda {i} — {'✅' if ok else '❌'}")
-                    st.write(qtext)
-                    st.write(f"Risposta data: **{chosen}** | Corretta: **{correct}**")
-                    st.caption(expl)
-
-                if "case_prompt" in st.session_state:
-                    case_row = (
-                        sb.table("practical_cases")
-                        .select("*")
-                        .eq("session_id", session_id)
-                        .order("id", desc=True)
-                        .limit(1)
-                        .execute()
-                        .data
-                    )
-                    if case_row:
-                        st.markdown("## Caso pratico — Esito")
-                        st.write(f"**Valutazione:** {case_row[0]['grade']}")
-                        st.caption(case_row[0]["feedback"])
-
-                st.success("Sessione salvata nel database ✅")
 
