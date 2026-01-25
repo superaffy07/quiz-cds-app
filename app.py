@@ -202,8 +202,7 @@ with tabs[0]:
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
         if st.button("Inizia sessione"):
-            pass
-    # create session
+   # create session
     topic_scope = "single" if scope == "Un solo argomento" else "all"
     selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
 
@@ -219,7 +218,7 @@ with tabs[0]:
     st.session_state["quiz_items"] = []
     st.session_state["answers"] = {}
 
-    # genera tutte le domande in memoria
+    # ✅ genera tutte le domande in memoria
     batch_payload = []
     for _ in range(int(n_questions)):
         t = random.choice(selected_topics)
@@ -239,7 +238,7 @@ with tabs[0]:
         batch_payload.append(payload)
         st.session_state["quiz_items"].append(payload)
 
-    # UNA SOLA insert (evita blocco)
+    # ✅ UNA SOLA insert (evita blocco)
     sb.table("quiz_answers").insert(batch_payload).execute()
 
     if include_case:
