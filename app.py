@@ -226,7 +226,7 @@ if st.button("Inizia sessione"):
 # Session in progress
 if st.session_state.get("in_progress"):
     st.subheader("Sessione in corso (correzione alla fine)")
-            quiz_items = st.session_state["quiz_items"]
+    quiz_items = st.session_state["quiz_items"]
 
             for idx, item in enumerate(quiz_items, start=1):
                 st.markdown(f"### Domanda {idx}")
