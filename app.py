@@ -202,6 +202,7 @@ with tabs[0]:
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
         if st.button("Inizia sessione"):
+            pass
     # create session
     topic_scope = "single" if scope == "Un solo argomento" else "all"
     selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
