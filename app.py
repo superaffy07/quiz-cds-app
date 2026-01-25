@@ -185,15 +185,20 @@ with tabs[0]:
         st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
 
         topics = fetch_topics()
-        if not topics:
-            scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
-        if scope == "Un solo argomento":
-            labels = [f"{t['id']} - {t['argomento']}" for t in topics]
-            chosen = st.selectbox("Seleziona argomento", labels)
-            chosen_id = int(chosen.split(" - ")[0])
-            selected_topics = [t for t in topics if t["id"] == chosen_id]
-        else:
-            selected_topics = topics
+if not topics:
+    st.error("Nessun argomento disponibile nel database. Carica prima il CSV nella sezione Docente.")
+    st.stop()
+
+scope = st.radio("Allenamento su:", ["Tutti gli argomenti", "Un solo argomento"], horizontal=True)
+
+if scope == "Un solo argomento":
+    labels = [f"{t['id']} - {t['argomento']}" for t in topics]
+    chosen = st.selectbox("Seleziona argomento", labels)
+    chosen_id = int(chosen.split(" - ")[0])
+    selected_topics = [t for t in topics if t["id"] == chosen_id]
+else:
+    selected_topics = topics
+
 
         n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
