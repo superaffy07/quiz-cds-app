@@ -201,10 +201,16 @@ with tabs[0]:
         n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
+import time
+
 if st.button("Inizia sessione"):
+    t0 = time.time()
+    st.info("STEP 1: clic ricevuto")
+
     # create session
     topic_scope = "single" if scope == "Un solo argomento" else "all"
     selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
+    st.info("STEP 2: topic_scope ok")
 
     sess = sb.table("sessions").insert({
         "student_id": student["id"],
@@ -213,37 +219,16 @@ if st.button("Inizia sessione"):
         "selected_topic_id": selected_topic_id,
         "n_questions": int(n_questions),
     }).execute().data[0]
+    st.info(f"STEP 3: session creata (id={sess['id']}) in {time.time()-t0:.2f}s")
 
     st.session_state["session_id"] = sess["id"]
     st.session_state["quiz_items"] = []
     st.session_state["answers"] = {}
     st.session_state["in_progress"] = True
+    st.info("STEP 4: session_state ok")
 
-    # genera quiz UNA VOLTA SOLA
-    for _ in range(int(n_questions)):
-        t = random.choice(selected_topics)
-        q, opts, correct, expl = build_mcq_from_source(
-            t["argomento"], t["fonte_testo"]
-        )
-
-        payload = {
-            "session_id": sess["id"],
-            "topic_id": t["id"],
-            "question_text": q,
-            "option_a": opts[0],
-            "option_b": opts[1],
-            "option_c": opts[2],
-            "option_d": opts[3],
-            "correct_option": correct,
-            "chosen_option": None,
-            "explanation": expl,
-        }
-
-        sb.table("quiz_answers").insert(payload).execute()
-        st.session_state["quiz_items"].append(payload)
-
-    st.experimental_rerun()
-
+    st.warning("STOP QUI: se vedi questo, Supabase è OK e il blocco è nella generazione quiz")
+    st.stop()
 
 
 # Session in progress
