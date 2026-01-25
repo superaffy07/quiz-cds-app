@@ -201,7 +201,7 @@ with tabs[0]:
         n_questions = st.slider("Numero quiz (multiple choice)", 5, 30, 10)
         include_case = st.checkbox("Includi anche 1 caso pratico (a fine sessione)", value=True)
 
-        if st.button("Inizia sessione"):
+if st.button("Inizia sessione"):
     # create session
     topic_scope = "single" if scope == "Un solo argomento" else "all"
     selected_topic_id = selected_topics[0]["id"] if topic_scope == "single" else None
@@ -218,11 +218,13 @@ with tabs[0]:
     st.session_state["quiz_items"] = []
     st.session_state["answers"] = {}
 
-    # ✅ genera tutte le domande in memoria
     batch_payload = []
     for _ in range(int(n_questions)):
         t = random.choice(selected_topics)
-        q, opts, correct, expl = build_mcq_from_source(t["argomento"], t["fonte_testo"])
+        q, opts, correct, expl = build_mcq_from_source(
+            t["argomento"], t["fonte_testo"]
+        )
+
         payload = {
             "session_id": sess["id"],
             "topic_id": t["id"],
@@ -235,10 +237,10 @@ with tabs[0]:
             "chosen_option": None,
             "explanation": expl,
         }
+
         batch_payload.append(payload)
         st.session_state["quiz_items"].append(payload)
 
-    # ✅ UNA SOLA insert (evita blocco)
     sb.table("quiz_answers").insert(batch_payload).execute()
 
     if include_case:
@@ -248,8 +250,9 @@ with tabs[0]:
         st.session_state["case_answer"] = ""
 
     st.session_state["in_progress"] = True
-    st.success("Sessione creata ✅ Scorri sotto per le domande.")
+    st.success("Sessione avviata ✅")
     st.rerun()
+
 
         # Session in progress
         if st.session_state.get("in_progress"):
