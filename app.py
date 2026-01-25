@@ -253,9 +253,8 @@ if st.button("Inizia sessione"):
     st.success("Sessione avviata ✅")
     st.rerun()
 
-
-        # Session in progress
-        if st.session_state.get("in_progress"):
+# Session in progress
+    if st.session_state.get("in_progress"):
             st.subheader("Sessione in corso (correzione alla fine)")
             quiz_items = st.session_state["quiz_items"]
 
