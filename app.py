@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from supabase import create_client
 
 # =========================
@@ -54,49 +55,72 @@ def create_session(student_id: int, n_questions: int, duration_seconds: int) -> 
         "n_questions": int(n_questions),
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    # NB: la tua tabella sessions accetta questi campi (come nel tuo schema)
     res = sb.table("sessions").insert(payload).execute()
     sess = res.data[0]
 
-    # memorizza durata in session_state (non DB)
+    # durata solo in session_state (non DB)
     st.session_state["duration_seconds"] = int(duration_seconds)
     return sess
 
 
 def fetch_bank_count() -> int:
-    # count via select head
     res = sb.table("question_bank").select("id", count="exact").limit(1).execute()
     return int(res.count or 0)
 
 
 def fetch_all_bank_questions() -> list[dict]:
-    # per 1000-2000 domande va bene. Se cresci tanto, poi ottimizziamo.
     res = sb.table("question_bank").select("*").order("id").execute()
     return res.data or []
 
 
 def insert_session_questions(session_id: str, questions: list[dict]) -> None:
-    # Salviamo le domande estratte nella tabella quiz_answers (snapshot della sessione)
+    """
+    Salva uno snapshot della simulazione dentro quiz_answers.
+    IMPORTANTE:
+    - option_d NON DEVE MAI ESSERE NULL (mettiamo "" se manca)
+    - se option_d è vuota, correct_option NON può essere "D"
+    """
     rows = []
     for q in questions:
+        qa = (q.get("question_text") or "").strip()
+        oa = (q.get("option_a") or "").strip()
+        ob = (q.get("option_b") or "").strip()
+        oc = (q.get("option_c") or "").strip()
+        od = (q.get("option_d") or "").strip()
+        co = (q.get("correct_option") or "").strip().upper()
+
+        # se D manca, la rendiamo stringa vuota (mai NULL)
+        if od == "":
+            od = ""
+
+        # protezione: se D è vuota, correct_option non può essere D
+        if od == "" and co == "D":
+            # qui scegliamo: fallback su C se esiste, altrimenti B, altrimenti A
+            # (meglio che crashare la simulazione)
+            if oc:
+                co = "C"
+            elif ob:
+                co = "B"
+            else:
+                co = "A"
+
         rows.append(
             {
                 "session_id": session_id,
                 "topic_id": None,
-                "question_text": (q.get("question_text") or "").strip(),
-                "option_a": (q.get("option_a") or "").strip(),
-                "option_b": (q.get("option_b") or "").strip(),
-                "option_c": (q.get("option_c") or "").strip(),
-                "option_d": (q.get("option_d") or "").strip(),   # <-- mai NULL
-                "correct_option": (q.get("correct_option") or "").strip().upper(),
+                "question_text": qa,
+                "option_a": oa,
+                "option_b": ob,
+                "option_c": oc,
+                "option_d": od,  # <-- mai NULL
+                "correct_option": co,  # A/B/C/D
                 "chosen_option": None,
                 "explanation": (q.get("explanation") or "").strip(),
             }
         )
+
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
-
-
 
 
 def fetch_session_questions(session_id: str) -> list[dict]:
@@ -120,9 +144,9 @@ defaults = {
     "student": None,
     "session_id": None,
     "in_progress": False,
-    "started_ts": None,          # timer start (epoch)
-    "duration_seconds": 30 * 60, # 30 minuti
-    "answers": {},               # {row_id: "A"/"B"/"C"/"D"}
+    "started_ts": None,
+    "duration_seconds": 30 * 60,  # 30 minuti
+    "answers": {},  # {row_id: "A"/"B"/"C"/"D"}
     "show_results": False,
 }
 for k, v in defaults.items():
@@ -177,26 +201,25 @@ with tab_doc:
             st.error(f"Mancano colonne: {missing}")
             st.stop()
 
-        # normalizza
         if "explanation" not in df.columns:
             df["explanation"] = ""
 
+        # normalizza
         df = df.fillna("")
-        # valida: se option_d è vuota, correct_option non può essere D
-bad_d = (df["option_d"].astype(str).str.strip() == "") & (df["correct_option"] == "D")
-if bad_d.any():
-    st.error("Trovate righe con correct_option = D ma option_d vuota. Correggi il CSV.")
-    st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
-    st.stop()
-
         df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
 
         # valida correct_option
         ok_mask = df["correct_option"].isin(["A", "B", "C", "D"])
         if not ok_mask.all():
-            bad = df.loc[~ok_mask, ["correct_option"]].head(10)
             st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D). Esempi:")
-            st.dataframe(bad)
+            st.dataframe(df.loc[~ok_mask, ["question_text", "correct_option"]].head(10))
+            st.stop()
+
+        # se option_d è vuota, correct_option non può essere D
+        bad_d = (df["option_d"].astype(str).str.strip() == "") & (df["correct_option"] == "D")
+        if bad_d.any():
+            st.error("Trovate righe con correct_option = D ma option_d vuota. Correggi il CSV.")
+            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
             st.stop()
 
         rows = df[required + ["explanation"]].to_dict(orient="records")
@@ -258,7 +281,6 @@ with tab_stud:
         st.markdown("### Simulazione (30 domande – 30 minuti)")
         if st.button("Inizia simulazione"):
             try:
-                # 1) crea sessione
                 sess = create_session(student_id=student["id"], n_questions=n_questions, duration_seconds=duration_seconds)
                 st.session_state["session_id"] = sess["id"]
                 st.session_state["in_progress"] = True
@@ -266,11 +288,9 @@ with tab_stud:
                 st.session_state["answers"] = {}
                 st.session_state["started_ts"] = time.time()
 
-                # 2) estrai 30 random dalla banca
                 all_q = fetch_all_bank_questions()
                 picked = random.sample(all_q, n_questions)
 
-                # 3) salva snapshot in quiz_answers per la sessione
                 insert_session_questions(sess["id"], picked)
 
                 st.success("Simulazione avviata ✅")
@@ -285,6 +305,12 @@ with tab_stud:
     # IN PROGRESS
     # =========================
     if st.session_state["in_progress"]:
+        # auto-refresh ogni 1 secondo (senza perdere session_state)
+        components.html(
+            "<script>setTimeout(() => window.parent.location.reload(), 1000);</script>",
+            height=0,
+        )
+
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
 
@@ -292,7 +318,6 @@ with tab_stud:
             st.error("Sessione senza domande in DB (quiz_answers vuota).")
             st.stop()
 
-        # TIMER
         elapsed = int(time.time() - st.session_state["started_ts"])
         remaining = max(0, st.session_state["duration_seconds"] - elapsed)
 
@@ -313,43 +338,42 @@ with tab_stud:
         st.divider()
         st.markdown("## 📝 Sessione in corso")
 
-        # render domande
         for idx, row in enumerate(rows, start=1):
             st.markdown(f"### Q{idx}")
             st.write(row["question_text"])
 
-           options_map = {
-    "A": (row.get("option_a") or "").strip(),
-    "B": (row.get("option_b") or "").strip(),
-    "C": (row.get("option_c") or "").strip(),
-    "D": (row.get("option_d") or "").strip(),
-}
+            options_map = {
+                "A": (row.get("option_a") or "").strip(),
+                "B": (row.get("option_b") or "").strip(),
+                "C": (row.get("option_c") or "").strip(),
+                "D": (row.get("option_d") or "").strip(),
+            }
 
-# tieni solo le opzioni che hanno testo
-letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
+            # MOSTRA SOLO opzioni con testo (se D è vuota, non compare)
+            letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
 
-def fmt(letter: str) -> str:
-    return f"{letter}) {options_map[letter]}"
+            def fmt(letter: str) -> str:
+                return f"{letter}) {options_map[letter]}"
 
-current = st.session_state["answers"].get(row["id"])
+            current = st.session_state["answers"].get(row["id"])
 
-chosen = st.radio(
-    "Seleziona risposta",
-    options=letters,                 # <-- qui NON è fisso A/B/C/D
-    format_func=fmt,
-    index=(letters.index(current) if current in letters else 0),
-    key=f"row_{row['id']}",
-    horizontal=False,
-)
+            chosen = st.radio(
+                "Seleziona risposta",
+                options=letters,
+                format_func=fmt,
+                index=(letters.index(current) if current in letters else 0),
+                key=f"row_{row['id']}",
+                horizontal=False,
+            )
 
-st.session_state["answers"][row["id"]] = chosen
-try:
-    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=chosen)
-except Exception:
-    pass
+            st.session_state["answers"][row["id"]] = chosen
+            try:
+                update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=chosen)
+            except Exception:
+                pass
+
             st.divider()
 
-        # termina manualmente
         if st.button("Termina simulazione e vedi correzione"):
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
@@ -392,6 +416,3 @@ except Exception:
             st.session_state["answers"] = {}
             st.session_state["started_ts"] = None
             st.rerun()
-
-
-
