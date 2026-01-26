@@ -640,9 +640,25 @@ with tab_stud:
         if st.session_state["bank_doc"] is None:
             st.markdown("### Seleziona un argomento")
             for d in docs:
-                if st.button(d["title"], use_container_width=True):
-                    st.session_state["bank_doc"] = d
-                    st.rerun()
+                for d in docs:
+    st.markdown(
+        f"""
+        <a href="{d['url']}" target="_blank" style="text-decoration:none;">
+            <div style="
+                padding:14px 16px;
+                border:1px solid rgba(0,0,0,.12);
+                border-radius:12px;
+                margin-bottom:10px;
+                background: rgba(255,255,255,.03);
+                font-weight:600;
+            ">
+                {d['title']}
+            </div>
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+
             st.stop()
 
         # Visualizzazione PDF
