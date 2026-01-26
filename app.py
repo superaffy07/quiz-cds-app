@@ -240,6 +240,75 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     st.stop()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def show_landing_wow():
+    st.markdown(
+        """
+        <style>
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(rgba(0,0,0,.65), rgba(0,0,0,.65)),
+                        url("https://images.unsplash.com/photo-1605902711622-cfb43c44367f?auto=format&fit=crop&w=1600&q=80");
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+        }
+
+        .hero-box {
+            background: rgba(0,0,0,.55);
+            padding: 60px 80px;
+            border-radius: 24px;
+            box-shadow: 0 0 60px rgba(0,0,0,.7);
+        }
+
+        .hero-title {
+            font-size: 64px;
+            font-weight: 800;
+            letter-spacing: 2px;
+        }
+
+        .hero-sub {
+            font-size: 22px;
+            margin-top: 10px;
+            opacity: .9;
+        }
+
+        .hero-btn {
+            margin-top: 40px;
+            padding: 16px 40px;
+            font-size: 20px;
+            font-weight: 600;
+            border-radius: 30px;
+            background: #1e90ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .hero-btn:hover {
+            background: #63b3ff;
+        }
+        </style>
+
+        <div class="hero">
+            <div class="hero-box">
+                <div class="hero-title">PLATFORM CORSO PL</div>
+                <div class="hero-sub">
+                    Formazione professionale per Polizia Locale
+                </div>
+                <form action="">
+                    <button class="hero-btn">
+                        Accedi alla piattaforma
+                    </button>
+                </form>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # =============================================================================
 # UTIL / DB
