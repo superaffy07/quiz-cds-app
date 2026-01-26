@@ -10,7 +10,9 @@ from supabase import create_client, Client
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Allenamento Quiz CDS", page_icon="🚓", layout="wide")
+st.set_page_config(
+    page_title="Corso Polizia Locale — Simulazioni e Quiz",
+
 
 N_QUESTIONS = 30
 DURATION_SECONDS = 30 * 60  # 30 minuti
@@ -165,7 +167,7 @@ import streamlit as st
 
 # ---------- UI / BRANDING ----------
 st.set_page_config(
-    page_title="Corso Polizia Locale — Quiz",
+    page_title="Corso Polizia Locale — Simulazioni e Quiz",
     page_icon="🚓",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -281,29 +283,15 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 def render_header(total_questions: int | None = None):
     tq = f"{total_questions}" if isinstance(total_questions, int) else "—"
-    st.markdown(
-        f"""
-        <div class="hero">
-          <div class="hero-top">
-            <div>
-              <div class="hero-title">🚓 Corso Polizia Locale — Allenamento Quiz</div>
-              <div class="hero-sub">
-                Simulazioni da 30 domande • Timer 30 minuti • Correzione finale con riepilogo completo
-              </div>
-              <div class="hero-sub" style="margin-top:6px;">
-                Creato da <strong>Raffaele Sotero</strong> • Versione Web
-              </div>
-            </div>
-            <div class="badges">
-              <span class="badge">📚 <strong>Banca dati</strong>: {tq}</span>
-              <span class="badge">⏱️ <strong>Timer</strong>: 30 min</span>
-              <span class="badge">✅ <strong>Correzione</strong>: fine prova</span>
-            </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+   st.markdown("""
+<div class="hero">
+  <div class="hero-title">🚓 Corso Polizia Locale — Simulazioni e Quiz</div>
+  <div class="hero-subtitle">
+    Piattaforma didattica a cura di Raffaele Sotero<br>
+    Simulazioni da 30 domande • Quiz a scelta multipla • Timer 30 minuti • Correzione finale dettagliata
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.title("🚓 Allenamento Quiz CDS")
 st.caption("Simulazione: 30 domande random dalla banca dati. Timer 30 minuti. Correzione finale.")
