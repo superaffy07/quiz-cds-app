@@ -162,9 +162,39 @@ def db_random_questions(n: int = 30) -> list[dict]:
 
 
 def upsert_student(class_code: str, nickname: str) -> dict:
+    class_code = (class_code or "").strip()
+    nickname = (nickname or "").strip()
+
     payload = {"class_code": class_code, "nickname": nickname}
-    res = sb.table("students").upsert(payload, on_conflict="class_code,nickname").select("*").execute()
-    return (res.data or [])[0]
+
+    # 1) Prova UPSERT (compatibile con più versioni supabase/postgrest)
+    try:
+        # molte versioni accettano on_conflict
+        sb.table("students").upsert(payload, on_conflict="class_code,nickname").execute()
+    except TypeError:
+        # alcune versioni non accettano on_conflict
+        sb.table("students").upsert(payload).execute()
+    except Exception:
+        # se l'upsert fallisce per qualche motivo (es. policy), proviamo insert "safe"
+        try:
+            sb.table("students").insert(payload).execute()
+        except Exception:
+            pass
+
+    # 2) Recupera SEMPRE il record con una SELECT separata (evita problemi di response .data / .select dopo upsert)
+    res = sb.table("students").select("*").eq("class_code", class_code).eq("nickname", nickname).limit(1).execute()
+
+    data = None
+    if hasattr(res, "data"):
+        data = res.data
+    elif isinstance(res, dict):
+        data = res.get("data")
+
+    if not data:
+        raise RuntimeError("Impossibile recuperare lo studente dopo l'upsert. Controlla RLS/policies su 'students'.")
+
+    return data[0]
+
 
 
 def create_session(student_id: int, n_questions: int) -> dict:
