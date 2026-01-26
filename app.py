@@ -607,7 +607,7 @@ with tab_stud:
 # Stato risposta selezionata (più professionale)
                 if new_val is None:
                 st.caption("📝 **Stato:** Non hai risposto")
-            else:
+                else:
                 st.caption(f"📝 **Stato:** Risposta selezionata → **{new_val}**")
 
                 except Exception:
