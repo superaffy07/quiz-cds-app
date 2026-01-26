@@ -7,6 +7,123 @@ from typing import List, Dict
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
+# =========================
+# LANDING PAGE – STILE POLIZIA LOCALE
+# =========================
+st.markdown(
+    """
+    <style>
+    /* Sfondo generale */
+    .stApp {
+        background: linear-gradient(180deg, #0e1a2b 0%, #111827 100%);
+        color: #ffffff;
+    }
+
+    /* Nasconde header Streamlit */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Hero */
+    .hero {
+        max-width: 1100px;
+        margin: auto;
+        padding: 70px 40px 50px 40px;
+        text-align: left;
+    }
+
+    .hero-badge {
+        display: inline-block;
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 18px;
+    }
+
+    .hero-title {
+        font-size: 48px;
+        font-weight: 800;
+        line-height: 1.15;
+        margin-bottom: 16px;
+    }
+
+    .hero-title span {
+        color: #60a5fa;
+    }
+
+    .hero-sub {
+        font-size: 18px;
+        color: #cbd5e1;
+        max-width: 720px;
+        margin-bottom: 32px;
+    }
+
+    /* Cards */
+    .hero-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        margin-top: 30px;
+    }
+
+    .hero-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 22px;
+        backdrop-filter: blur(6px);
+    }
+
+    .hero-card h4 {
+        font-size: 16px;
+        margin-bottom: 6px;
+        color: #93c5fd;
+    }
+
+    .hero-card p {
+        font-size: 14px;
+        color: #cbd5e1;
+        margin: 0;
+    }
+    </style>
+
+    <div class="hero">
+        <div class="hero-badge">🚓 Platform Corso PL</div>
+
+        <div class="hero-title">
+            Banca dati, simulazioni e quiz<br>
+            <span>Polizia Locale</span>
+        </div>
+
+        <div class="hero-sub">
+            Piattaforma didattica professionale per la preparazione ai concorsi
+            di Polizia Locale: simulazioni d’esame, banca dati normativa
+            e casi pratici commentati.
+        </div>
+
+        <div class="hero-cards">
+            <div class="hero-card">
+                <h4>📚 Banca dati</h4>
+                <p>Normativa aggiornata e consultabile per lo studio.</p>
+            </div>
+
+            <div class="hero-card">
+                <h4>📝 Simulazioni quiz</h4>
+                <p>Prove d’esame realistiche con timer e correzione.</p>
+            </div>
+
+            <div class="hero-card">
+                <h4>⚖️ Casi pratici</h4>
+                <p>Applicazione concreta delle norme operative.</p>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 
 # =========================================================
 # PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
