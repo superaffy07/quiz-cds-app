@@ -666,10 +666,10 @@ with tab_stud:
         pdf_bytes = resp.content
         st.download_button(
            "⬇️ Scarica PDF",
-    data=pdf_bytes,
-    file_name=d["title"].replace(" ", "_") + ".pdf",
-    mime="application/pdf",
-    use_container_width=True,
+          data=pdf_bytes,
+          file_name=d["title"].replace(" ", "_") + ".pdf",
+          mime="application/pdf",
+          use_container_width=True,
 )
 
 b64 = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -681,10 +681,9 @@ pdf_html = f"""
     style="border:none;"
 ></iframe>
 """
-st.markdown(pdf_html, unsafe_allow_html=True)
+    st.markdown(pdf_html, unsafe_allow_html=True)
 
-
-        st.stop()
+    st.stop()
 
 
     # =========================================================
