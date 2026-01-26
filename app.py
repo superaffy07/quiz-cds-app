@@ -10,7 +10,7 @@ from supabase import create_client, Client
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Allenamento Quiz CDS", page_icon="🚓", layout="wide")
+st.set_page_config(page_title="ESERCITAZIONE CORSO POLIZIA LOCALE", page_icon="🚓", layout="wide")
 
 # Durata simulazione
 N_QUESTIONS_DEFAULT = 30
