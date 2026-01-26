@@ -2,31 +2,132 @@ import os
 import time
 import random
 from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import streamlit as st
 from supabase import create_client, Client
 
-# =========================
-# CONFIG
-# =========================
-import streamlit as st
-
+# =========================================================
+# PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
+# =========================================================
 st.set_page_config(
     page_title="Corso Polizia Locale — Simulazioni e Quiz",
     page_icon="🚓",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
+# =========================================================
+# STILI (NO BLU, MODERNO, LEGGIBILE)
+# =========================================================
+CUSTOM_CSS = """
+<style>
+/* layout */
+.block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
 
-N_QUESTIONS = 30
-DURATION_SECONDS = 30 * 60  # 30 minuti
+/* background chiaro pulito */
+.stApp {
+  background: #f6f7fb;
+}
 
-# =========================
+/* card header */
+.hero {
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 18px;
+  padding: 18px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  margin-bottom: 18px;
+}
+.hero-title {
+  font-size: 30px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: .2px;
+  color: #111827;
+}
+.hero-sub {
+  margin: 6px 0 0 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.badges { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+.badge {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fbfbfd;
+  color: #111827;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* tabs */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #374151;
+  font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+  background: #f3f4f6 !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+}
+
+/* buttons */
+.stButton > button {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: white;
+  color: #111827;
+  transition: all .12s ease-in-out;
+  font-weight: 700;
+}
+.stButton > button:hover {
+  transform: translateY(-1px);
+  background: #f9fafb;
+}
+
+/* radio / inputs */
+div[data-baseweb="input"] > div {
+  border-radius: 12px !important;
+}
+.stRadio label { color: #111827; }
+
+/* alert */
+div[data-testid="stAlert"] {
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.08);
+}
+
+/* divider */
+hr { border-top: 1px solid rgba(0,0,0,.08); }
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+# =========================================================
+# COSTANTI
+# =========================================================
+N_QUESTIONS_DEFAULT = 30
+DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
+
+# =========================================================
 # SUPABASE
-# =========================
+# =========================================================
 def get_secret(name: str, default: str = "") -> str:
-    # supporta sia secrets Streamlit che env
+    # supporta sia Streamlit secrets che env var
     try:
         v = st.secrets.get(name, default)
         if v:
@@ -45,9 +146,9 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-# =========================
+# =========================================================
 # DB HELPERS
-# =========================
+# =========================================================
 def upsert_student(class_code: str, nickname: str) -> Dict:
     class_code = class_code.strip()
     nickname = nickname.strip()
@@ -90,9 +191,11 @@ def fetch_all_bank_questions() -> List[Dict]:
 
 def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
     """
-    Snapshot delle domande nella tabella quiz_answers (una riga per quiz).
-    FIX: option_d non deve MAI essere NULL → se manca, stringa vuota.
-    FIX: se option_d è vuota, la D non deve essere considerata corretta.
+    Snapshot delle domande in quiz_answers.
+    FIX: option_d MAI NULL → se manca, diventa "".
+    FIX: se option_d = "" allora:
+         - la D non va mostrata
+         - correct_option non può essere D
     """
     rows = []
     for q in questions:
@@ -108,7 +211,6 @@ def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
 
         # se non esiste D, non può essere corretta
         if od == "" and co == "D":
-            # fallback sicuro
             if oc:
                 co = "C"
             elif ob:
@@ -116,18 +218,20 @@ def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
             else:
                 co = "A"
 
-        rows.append({
-            "session_id": session_id,
-            "topic_id": None,
-            "question_text": qa,
-            "option_a": oa,
-            "option_b": ob,
-            "option_c": oc,
-            "option_d": od if od else "",   # <-- MAI NULL
-            "correct_option": co,
-            "chosen_option": None,
-            "explanation": (q.get("explanation") or "").strip(),
-        })
+        rows.append(
+            {
+                "session_id": session_id,
+                "topic_id": None,
+                "question_text": qa,
+                "option_a": oa,
+                "option_b": ob,
+                "option_c": oc,
+                "option_d": od if od else "",  # <-- MAI NULL
+                "correct_option": co,
+                "chosen_option": None,
+                "explanation": (q.get("explanation") or "").strip(),
+            }
+        )
 
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
@@ -143,12 +247,12 @@ def fetch_session_questions(session_id: str) -> List[Dict]:
         or []
     )
 
-def update_chosen_option(row_id: int, session_id: str, chosen_letter: str) -> None:
+def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None) -> None:
     sb.table("quiz_answers").update({"chosen_option": chosen_letter}).eq("id", row_id).eq("session_id", session_id).execute()
 
-# =========================
+# =========================================================
 # SESSION STATE
-# =========================
+# =========================================================
 def ss_init():
     defaults = {
         "logged": False,
@@ -156,8 +260,11 @@ def ss_init():
         "session_id": None,
         "in_progress": False,
         "show_results": False,
-        "started_ts": None,
-        "duration_seconds": DURATION_SECONDS,
+        "started_ts": None,        # time.time() locale
+        "finished_ts": None,       # time.time() locale
+        "duration_seconds": DURATION_SECONDS_DEFAULT,
+        "n_questions": N_QUESTIONS_DEFAULT,
+        "auto_refresh": True,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -165,151 +272,42 @@ def ss_init():
 
 ss_init()
 
-# =========================
-# UI
-# =========================
-import streamlit as st
-
-# ---------- UI / BRANDING ----------
-st.set_page_config(
-    page_title="Corso Polizia Locale — Simulazioni e Quiz",
-    page_icon="🚓",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-CUSTOM_CSS = """
-<style>
-/* Background generale */
-.stApp {
-  background: radial-gradient(1200px 700px at 10% 0%, #0b1220 0%, #0b1220 35%, #0a0f1a 100%);
-  color: #e8eefc;
-}
-
-/* Contenitore principale più “card” */
-.block-container {
-  padding-top: 1.2rem;
-  padding-bottom: 3rem;
-  max-width: 1100px;
-}
-
-/* Header “hero” */
-.hero {
-  border: 1px solid rgba(255,255,255,.08);
-  background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  box-shadow: 0 12px 35px rgba(0,0,0,.35);
-  border-radius: 18px;
-  padding: 22px 22px;
-  margin-bottom: 18px;
-}
-.hero-top {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  flex-wrap:wrap;
-}
-.hero-title {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: .2px;
-  margin: 0;
-}
-.hero-sub {
-  margin: 6px 0 0 0;
-  opacity: .85;
-  font-size: 15px;
-}
-.badges {
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-}
-.badge {
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-}
-.badge strong { font-weight: 700; }
-
-/* Tab più pulite */
-.stTabs [data-baseweb="tab-list"] {
-  gap: 10px;
-  padding: 8px 6px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.08);
-}
-.stTabs [data-baseweb="tab"] {
-  border-radius: 12px;
-  padding: 10px 14px;
-  color: rgba(232,238,252,.85);
-}
-.stTabs [aria-selected="true"] {
-  background: rgba(79, 156, 255, .18) !important;
-  border: 1px solid rgba(79, 156, 255, .35) !important;
-  color: #e8eefc !important;
-}
-
-/* Bottoni più moderni */
-.stButton > button {
-  border-radius: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.08);
-  color: #e8eefc;
-  transition: all .15s ease-in-out;
-}
-.stButton > button:hover {
-  transform: translateY(-1px);
-  background: rgba(79,156,255,.18);
-  border: 1px solid rgba(79,156,255,.35);
-}
-
-/* Alert box più carine */
-div[data-testid="stAlert"] {
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
-}
-
-/* Linee/divider */
-hr {
-  border-top: 1px solid rgba(255,255,255,.12);
-}
-</style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
-
-def render_header(total_questions: int | None = None):
-    tq = f"{total_questions}" if isinstance(total_questions, int) else "—"
-   st.markdown("""
+# =========================================================
+# HEADER
+# =========================================================
+def render_header(total_questions: int):
+    st.markdown(
+        f"""
 <div class="hero">
   <div class="hero-title">🚓 Corso Polizia Locale — Simulazioni e Quiz</div>
-  <div class="hero-subtitle">
-    Piattaforma didattica a cura di Raffaele Sotero<br>
-    Simulazioni da 30 domande • Quiz a scelta multipla • Timer 30 minuti • Correzione finale dettagliata
+  <div class="hero-sub">
+    Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
+    Simulazioni random • {N_QUESTIONS_DEFAULT} domande • Timer {DURATION_SECONDS_DEFAULT//60} minuti • Correzione finale dettagliata
+  </div>
+  <div class="badges">
+    <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
+    <div class="badge">⏱️ <strong>Tempo</strong>: {DURATION_SECONDS_DEFAULT//60} minuti</div>
+    <div class="badge">✅ <strong>Valutazione</strong>: 1 punto per risposta esatta</div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
-st.title("🚓 Allenamento Quiz CDS")
-st.caption("Simulazione: 30 domande random dalla banca dati. Timer 30 minuti. Correzione finale.")
+# =========================================================
+# APP
+# =========================================================
+bank_count = fetch_bank_count()
+render_header(bank_count)
 
 tab_stud, tab_doc = st.tabs(["🎓 Studente", "🧑‍🏫 Docente (upload CSV)"])
 
-# =========================
+# =========================================================
 # DOCENTE
-# =========================
+# =========================================================
 with tab_doc:
     st.subheader("Carica banca dati (CSV)")
-
-    st.write("CSV minimo: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
+    st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
     st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
 
     admin = st.text_input("Codice docente", type="password")
@@ -346,6 +344,7 @@ with tab_doc:
 
         df = df.fillna("")
         df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
+        df["option_d"] = df["option_d"].astype(str).fillna("").str.strip()
 
         bad = ~df["correct_option"].isin(["A", "B", "C", "D"])
         if bad.any():
@@ -353,7 +352,7 @@ with tab_doc:
             st.dataframe(df.loc[bad, ["question_text", "correct_option"]].head(10))
             st.stop()
 
-        bad_d = (df["option_d"].astype(str).str.strip() == "") & (df["correct_option"] == "D")
+        bad_d = (df["option_d"] == "") & (df["correct_option"] == "D")
         if bad_d.any():
             st.error("Righe con correct_option = D ma option_d vuota. Correggi il CSV.")
             st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
@@ -372,12 +371,13 @@ with tab_doc:
     elif up and admin != ADMIN_CODE:
         st.warning("Codice docente errato.")
 
-# =========================
+# =========================================================
 # STUDENTE
-# =========================
+# =========================================================
 with tab_stud:
     st.subheader("Accesso studente")
 
+    # ---------- LOGIN ----------
     if not st.session_state["logged"]:
         class_code = st.text_input("Codice classe (es. CDS2026)")
         nickname = st.text_input("Nickname (es. Mirko)")
@@ -394,46 +394,52 @@ with tab_stud:
                 except Exception as e:
                     st.error("Errore accesso.")
                     st.exception(e)
+
         st.stop()
 
     student = st.session_state["student"]
+
     st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
 
-    col1, col2 = st.columns([1, 5])
+    col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("Logout"):
-            # reset pulito
             st.session_state["logged"] = False
             st.session_state["student"] = None
             st.session_state["session_id"] = None
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = False
             st.session_state["started_ts"] = None
-            st.session_state["duration_seconds"] = DURATION_SECONDS
+            st.session_state["finished_ts"] = None
+            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
             st.rerun()
 
     bank_count = fetch_bank_count()
     st.write(f"📚 Domande in banca dati: **{bank_count}**")
-    if bank_count < N_QUESTIONS:
-        st.warning(f"Servono almeno {N_QUESTIONS} domande. Ora: {bank_count}")
+
+    if bank_count < N_QUESTIONS_DEFAULT:
+        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande. Ora: {bank_count}")
         st.stop()
 
     st.divider()
 
-    # 1) NON AVVIATA
-    if not st.session_state["in_progress"] and not st.session_state["show_results"]:
+    # ---------- START ----------
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]):
         st.markdown("### Simulazione (30 domande – 30 minuti)")
+        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer scorre in tempo reale.")
+
         if st.button("Inizia simulazione"):
             try:
-                sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS)
+                sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS_DEFAULT)
                 st.session_state["session_id"] = sess["id"]
                 st.session_state["in_progress"] = True
                 st.session_state["show_results"] = False
                 st.session_state["started_ts"] = time.time()
-                st.session_state["duration_seconds"] = DURATION_SECONDS
+                st.session_state["finished_ts"] = None
+                st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
 
                 all_q = fetch_all_bank_questions()
-                picked = random.sample(all_q, N_QUESTIONS)
+                picked = random.sample(all_q, N_QUESTIONS_DEFAULT)
 
                 insert_session_questions(sess["id"], picked)
 
@@ -442,11 +448,10 @@ with tab_stud:
             except Exception as e:
                 st.error("Errore avvio simulazione.")
                 st.exception(e)
-                st.stop()
 
         st.stop()
 
-    # 2) IN CORSO
+    # ---------- IN PROGRESS ----------
     if st.session_state["in_progress"]:
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
@@ -460,20 +465,33 @@ with tab_stud:
 
         mm = remaining // 60
         ss = remaining % 60
-        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
 
+        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
         progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
         st.progress(min(max(progress, 0.0), 1.0))
+        st.divider()
 
         if remaining <= 0:
             st.warning("Tempo scaduto! Correzione automatica…")
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
+            st.session_state["finished_ts"] = time.time()
             finish_session(session_id)
             st.rerun()
 
-        st.divider()
         st.markdown("## 📝 Sessione in corso")
+
+        def letter_to_text(r: dict, letter: str) -> str:
+            letter = (letter or "").strip().upper()
+            if letter == "A":
+                return (r.get("option_a") or "").strip()
+            if letter == "B":
+                return (r.get("option_b") or "").strip()
+            if letter == "C":
+                return (r.get("option_c") or "").strip()
+            if letter == "D":
+                return (r.get("option_d") or "").strip()
+            return ""
 
         for idx, row in enumerate(rows, start=1):
             st.markdown(f"### Q{idx}")
@@ -485,28 +503,37 @@ with tab_stud:
                 "C": (row.get("option_c") or "").strip(),
                 "D": (row.get("option_d") or "").strip(),
             }
-            # mostra solo opzioni con testo
+
+            # MOSTRA SOLO OPZIONI CHE HANNO TESTO (D sparisce se vuota)
             letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
 
-            def fmt(letter: str) -> str:
-                return f"{letter}) {options_map[letter]}"
+            # per poter "non rispondere"
+            radio_options = ["—"] + letters
+
+            def fmt(opt: str) -> str:
+                if opt == "—":
+                    return "— (lascia senza risposta)"
+                return f"{opt}) {options_map[opt]}"
 
             current = (row.get("chosen_option") or "").strip().upper()
             if current not in letters:
-                current = None
+                current = "—"
 
             choice = st.radio(
                 "Seleziona risposta",
-                options=letters,
-                index=(letters.index(current) if current in letters else 0),
+                options=radio_options,
+                index=radio_options.index(current),
                 format_func=fmt,
                 key=f"q_{row['id']}",
             )
 
-            # salva immediatamente
-            if choice and choice != row.get("chosen_option"):
+            # salva (— = None)
+            new_val = None if choice == "—" else choice
+            old_val = (row.get("chosen_option") or None)
+
+            if new_val != old_val:
                 try:
-                    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=choice)
+                    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
                 except Exception:
                     pass
 
@@ -515,21 +542,20 @@ with tab_stud:
         if st.button("Termina simulazione e vedi correzione"):
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
+            st.session_state["finished_ts"] = time.time()
             finish_session(session_id)
             st.rerun()
 
-        # ✅ TIMER LIVE: rerun interno (non perde login)
+        # TIMER LIVE: aggiorna ogni secondo senza perdere login (session_state resta)
         time.sleep(1)
         st.rerun()
 
-# 3) RISULTATI
+# ---------- RESULTS ----------
 if st.session_state["show_results"]:
     session_id = st.session_state["session_id"]
     rows = fetch_session_questions(session_id)
 
-    st.markdown("## ✅ Correzione finale")
-
-    # calcolo punteggio PRIMA (così lo mostri anche sopra)
+    # calcolo punteggio
     score = 0
     for row in rows:
         chosen = (row.get("chosen_option") or "").strip().upper()
@@ -537,12 +563,22 @@ if st.session_state["show_results"]:
         if chosen and chosen == correct:
             score += 1
 
-    # PUNTEGGIO SOPRA
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
+    # tempo impiegato
+    start_ts = st.session_state.get("started_ts")
+    end_ts = st.session_state.get("finished_ts") or time.time()
+    elapsed_sec = int(max(0, float(end_ts) - float(start_ts))) if start_ts else 0
+    em = elapsed_sec // 60
+    es = elapsed_sec % 60
+
+    st.markdown("## ✅ Correzione finale")
+
+    # RISULTATO SOPRA + TEMPO
+    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
 
     st.divider()
 
     def letter_to_text(row: dict, letter: str) -> str:
+        letter = (letter or "").strip().upper()
         if letter == "A":
             return (row.get("option_a") or "").strip()
         if letter == "B":
@@ -565,7 +601,7 @@ if st.session_state["show_results"]:
         st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
         st.write(row["question_text"])
 
-        # Mostra LETTERA + TESTO (così capisci cosa hai selezionato)
+        # MOSTRA LETTERA + TESTO (così capisci subito)
         if chosen:
             st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
         else:
@@ -578,14 +614,15 @@ if st.session_state["show_results"]:
 
         st.divider()
 
-    # PUNTEGGIO SOTTO (lo lasciamo anche qui)
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
+    # RISULTATO SOTTO
+    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
 
     if st.button("Nuova simulazione"):
         st.session_state["session_id"] = None
         st.session_state["in_progress"] = False
         st.session_state["show_results"] = False
         st.session_state["started_ts"] = None
-        st.session_state["duration_seconds"] = DURATION_SECONDS
+        st.session_state["finished_ts"] = None
+        st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
         st.rerun()
 
