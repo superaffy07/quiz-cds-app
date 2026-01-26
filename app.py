@@ -10,8 +10,13 @@ from supabase import create_client, Client
 # =========================
 # CONFIG
 # =========================
+import streamlit as st
+
 st.set_page_config(
     page_title="Corso Polizia Locale — Simulazioni e Quiz",
+    page_icon="🚓",
+    layout="wide",
+)
 
 
 N_QUESTIONS = 30
