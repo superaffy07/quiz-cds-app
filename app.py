@@ -154,6 +154,21 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
   background: #9b1c14 !important;
   transform: translateY(-1px);
 }
+/* === Stato risposta (pill verde/gialla) === */
+.status-pill{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  margin: 8px 0 10px 0;
+  font-size: 13px;
+}
+.status-pill.ok{
+  background: rgba(34,197,94,0.12);
+}
+.status-pill.warn{
+  background: rgba(245,158,11,0.14);
+}
+
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -532,6 +547,7 @@ with tab_stud:
 
         # TIMER SUPER FLUIDO (NO RERUN)
         end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
+        time_up = time.time() >= end_ts
         render_live_timer(end_ts)
 
         progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
@@ -548,6 +564,9 @@ with tab_stud:
             st.rerun()
 
         st.markdown("## 📝 Sessione in corso")
+        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
+        st.markdown(f"**Risposte date:** {answered}/{len(rows)}")
+
 
         # Lettere "bold" compatibili con radio (no markdown)
         BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
@@ -589,23 +608,37 @@ with tab_stud:
             if current not in letters:
                 current = "—"
 
-            choice = st.radio(
-                "Seleziona risposta",
-                options=radio_options,
-                index=radio_options.index(current),
-                format_func=fmt,
-                key=f"q_{row['id']}",
-            )
+choice = st.radio(
+    "Seleziona risposta",
+    options=radio_options,
+    index=radio_options.index(current),
+    format_func=fmt,
+    key=f"q_{row['id']}",
+    disabled=time_up,
+)
+
 
             # salva (— = None)
             new_val = None if choice == "—" else choice
             old_val = (row.get("chosen_option") or None)
 
-            if new_val != old_val:
+            if (not time_up) and (new_val != old_val):
                 try:
                     update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
                 except Exception:
                     pass
+                    # Stato risposta selezionata (pill professionale)
+if new_val is None:
+    st.markdown(
+        '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
+        unsafe_allow_html=True,
+    )
+
 
             st.divider()
 
