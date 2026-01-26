@@ -385,35 +385,70 @@ with tab_stud:
         time.sleep(1)
         st.rerun()
 
-    # 3) RISULTATI
-    if st.session_state["show_results"]:
-        session_id = st.session_state["session_id"]
-        rows = fetch_session_questions(session_id)
+# 3) RISULTATI
+if st.session_state["show_results"]:
+    session_id = st.session_state["session_id"]
+    rows = fetch_session_questions(session_id)
 
-        st.markdown("## ✅ Correzione finale")
+    st.markdown("## ✅ Correzione finale")
 
-        score = 0
-        for idx, row in enumerate(rows, start=1):
-            chosen = (row.get("chosen_option") or "").strip().upper()
-            correct = (row.get("correct_option") or "").strip().upper()
-            ok = (chosen == correct)
-            if ok:
-                score += 1
+    # calcolo punteggio PRIMA (così lo mostri anche sopra)
+    score = 0
+    for row in rows:
+        chosen = (row.get("chosen_option") or "").strip().upper()
+        correct = (row.get("correct_option") or "").strip().upper()
+        if chosen and chosen == correct:
+            score += 1
 
-            st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
-            st.write(row["question_text"])
-            st.write(f"**Tua risposta:** {chosen or '—'}")
-            st.write(f"**Corretta:** {correct}")
-            if row.get("explanation"):
-                st.caption(row["explanation"])
-            st.divider()
+    # PUNTEGGIO SOPRA
+    st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
 
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
+    st.divider()
 
-        if st.button("Nuova simulazione"):
-            st.session_state["session_id"] = None
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = False
-            st.session_state["started_ts"] = None
-            st.session_state["duration_seconds"] = DURATION_SECONDS
-            st.rerun()
+    def letter_to_text(row: dict, letter: str) -> str:
+        if letter == "A":
+            return (row.get("option_a") or "").strip()
+        if letter == "B":
+            return (row.get("option_b") or "").strip()
+        if letter == "C":
+            return (row.get("option_c") or "").strip()
+        if letter == "D":
+            return (row.get("option_d") or "").strip()
+        return ""
+
+    for idx, row in enumerate(rows, start=1):
+        chosen = (row.get("chosen_option") or "").strip().upper()
+        correct = (row.get("correct_option") or "").strip().upper()
+
+        chosen_text = letter_to_text(row, chosen) if chosen else ""
+        correct_text = letter_to_text(row, correct)
+
+        ok = (chosen != "" and chosen == correct)
+
+        st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
+        st.write(row["question_text"])
+
+        # Mostra LETTERA + TESTO (così capisci cosa hai selezionato)
+        if chosen:
+            st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
+        else:
+            st.write("**Tua risposta:** — (non risposta)")
+
+        st.write(f"**Corretta:** {correct}) {correct_text}")
+
+        if row.get("explanation"):
+            st.caption(row["explanation"])
+
+        st.divider()
+
+    # PUNTEGGIO SOTTO (lo lasciamo anche qui)
+    st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
+
+    if st.button("Nuova simulazione"):
+        st.session_state["session_id"] = None
+        st.session_state["in_progress"] = False
+        st.session_state["show_results"] = False
+        st.session_state["started_ts"] = None
+        st.session_state["duration_seconds"] = DURATION_SECONDS
+        st.rerun()
+
