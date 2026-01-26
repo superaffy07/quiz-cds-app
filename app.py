@@ -601,12 +601,22 @@ with tab_stud:
             new_val = None if choice == "—" else choice
             old_val = (row.get("chosen_option") or None)
 
-            if new_val != old_val:
-                try:
-                    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
+if new_val != old_val:
+    try:
+        update_chosen_option(
+            row_id=row["id"],
+            session_id=session_id,
+            chosen_letter=new_val
+        )
+    except Exception:
+        pass
 
-                except Exception:
-                    pass
+# Stato risposta selezionata (feedback professionale)
+if new_val is None:
+    st.caption("📝 **Stato risposta:** ⚠️ Non hai ancora risposto")
+else:
+    st.caption(f"📝 **Stato risposta:** ✅ Hai selezionato la risposta **{new_val}**")
+
 
             st.divider()
 
