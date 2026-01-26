@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Dict
 
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 from supabase import create_client, Client
 
 # =========================================================
@@ -547,8 +548,9 @@ with tab_stud:
             st.rerun()
 
         # TIMER LIVE: aggiorna ogni secondo senza perdere login (session_state resta)
-        time.sleep(1)
-        st.rerun()
+# TIMER FLUIDO: refresh automatico ogni 1s (client-side)
+st_autorefresh(interval=1000, key="timer_tick")
+
 
 # ---------- RESULTS ----------
 if st.session_state["show_results"]:
