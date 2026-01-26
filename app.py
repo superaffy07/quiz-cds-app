@@ -1,119 +1,130 @@
 import os
-import io
 import time
 import random
-from datetime import datetime, timezone
+from typing import List, Dict, Optional
 
-import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
-from supabase import create_client
+from supabase import create_client, Client
+
 
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Allenamento Quiz CDS", page_icon="🚓", layout="centered")
+st.set_page_config(page_title="Allenamento Quiz CDS", page_icon="🚓", layout="wide")
 
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", ""))
-SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", ""))
-ADMIN_CODE = st.secrets.get("ADMIN_CODE", os.getenv("ADMIN_CODE", "ADMIN123"))
+# Durata simulazione
+N_QUESTIONS_DEFAULT = 30
+DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
 
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    st.error("Mancano SUPABASE_URL / SUPABASE_ANON_KEY nelle Secrets di Streamlit.")
-    st.stop()
+# =========================
+# SUPABASE INIT
+# =========================
+def get_supabase() -> Client:
+    # prima prova da Streamlit secrets, poi da env
+    url = None
+    key = None
 
-sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    if hasattr(st, "secrets"):
+        url = st.secrets.get("SUPABASE_URL", None)
+        key = st.secrets.get("SUPABASE_ANON_KEY", None)
+
+    url = url or os.getenv("SUPABASE_URL")
+    key = key or os.getenv("SUPABASE_ANON_KEY")
+
+    if not url or not key:
+        st.error("Mancano SUPABASE_URL / SUPABASE_ANON_KEY (secrets o env).")
+        st.stop()
+
+    return create_client(url, key)
+
+
+sb = get_supabase()
+
 
 # =========================
 # DB HELPERS
 # =========================
-def upsert_student(class_code: str, nickname: str) -> dict:
+def upsert_student(class_code: str, nickname: str) -> Dict:
     class_code = class_code.strip()
     nickname = nickname.strip()
 
-    res = (
+    # prova a leggere se esiste
+    existing = (
         sb.table("students")
         .select("*")
         .eq("class_code", class_code)
         .eq("nickname", nickname)
         .limit(1)
         .execute()
+        .data
     )
-    if res.data:
-        return res.data[0]
+    if existing:
+        return existing[0]
 
-    ins = sb.table("students").insert({"class_code": class_code, "nickname": nickname}).execute()
-    return ins.data[0]
+    # altrimenti inserisci
+    inserted = (
+        sb.table("students")
+        .insert({"class_code": class_code, "nickname": nickname})
+        .execute()
+        .data
+    )
+    return inserted[0]
 
 
-def create_session(student_id: int, n_questions: int, duration_seconds: int) -> dict:
+def create_session(student_id: int, n_questions: int) -> Dict:
     payload = {
         "student_id": student_id,
-        "mode": "simulazione",
+        "mode": "sim",
         "topic_scope": "bank",
         "selected_topic_id": None,
         "n_questions": int(n_questions),
-        "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    res = sb.table("sessions").insert(payload).execute()
-    sess = res.data[0]
-
-    # durata solo in session_state (non DB)
-    st.session_state["duration_seconds"] = int(duration_seconds)
+    sess = sb.table("sessions").insert(payload).execute().data[0]
     return sess
 
 
+def finish_session(session_id: str) -> None:
+    sb.table("sessions").update({"finished_at": "now()"}).eq("id", session_id).execute()
+
+
 def fetch_bank_count() -> int:
-    res = sb.table("question_bank").select("id", count="exact").limit(1).execute()
+    # supabase count exact
+    res = sb.table("question_bank").select("id", count="exact").execute()
     return int(res.count or 0)
 
 
-def fetch_all_bank_questions() -> list[dict]:
-    res = sb.table("question_bank").select("*").order("id").execute()
-    return res.data or []
+def fetch_all_bank_questions() -> List[Dict]:
+    # scarica tutte (per 1000+ va paginato, ma per ora ok)
+    res = sb.table("question_bank").select("*").execute().data
+    return res or []
 
 
-def insert_session_questions(session_id: str, questions: list[dict]) -> None:
-    """
-    Salva uno snapshot della simulazione dentro quiz_answers.
-    IMPORTANTE:
-    - option_d NON DEVE MAI ESSERE NULL (mettiamo "" se manca)
-    - se option_d è vuota, correct_option NON può essere "D"
-    """
+def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
     rows = []
     for q in questions:
-        qa = (q.get("question_text") or "").strip()
-        oa = (q.get("option_a") or "").strip()
-        ob = (q.get("option_b") or "").strip()
-        oc = (q.get("option_c") or "").strip()
-        od = (q.get("option_d") or "").strip()
-        co = (q.get("correct_option") or "").strip().upper()
+        # normalizza opzioni
+        oa = (q.get("option_a") or "").replace("\xa0", " ").strip()
+        ob = (q.get("option_b") or "").replace("\xa0", " ").strip()
+        oc = (q.get("option_c") or "").replace("\xa0", " ").strip()
+        od = (q.get("option_d") or "").replace("\xa0", " ").strip()  # può essere vuota
 
-        # se D manca, la rendiamo stringa vuota (mai NULL)
-        if od == "":
-            od = ""
+        correct = (q.get("correct_option") or "").strip().upper()
+        if correct not in ["A", "B", "C", "D"]:
+            # se il CSV è sporco, prova a recuperare
+            correct = "A"
 
-        # protezione: se D è vuota, correct_option non può essere D
-        if od == "" and co == "D":
-            # qui scegliamo: fallback su C se esiste, altrimenti B, altrimenti A
-            # (meglio che crashare la simulazione)
-            if oc:
-                co = "C"
-            elif ob:
-                co = "B"
-            else:
-                co = "A"
-
+        # IMPORTANTISSIMO: quiz_answers.option_d è NOT NULL nel tuo schema
+        # quindi se non c'è D, metti stringa vuota "" (non None)
         rows.append(
             {
                 "session_id": session_id,
                 "topic_id": None,
-                "question_text": qa,
+                "question_text": (q.get("question_text") or q.get("testo_della_domanda") or "").strip(),
                 "option_a": oa,
                 "option_b": ob,
                 "option_c": oc,
-                "option_d": od,  # <-- mai NULL
-                "correct_option": co,  # A/B/C/D
+                "option_d": od if od else "",  # mai NULL
+                "correct_option": correct,     # A/B/C/D
                 "chosen_option": None,
                 "explanation": (q.get("explanation") or "").strip(),
             }
@@ -123,170 +134,132 @@ def insert_session_questions(session_id: str, questions: list[dict]) -> None:
         sb.table("quiz_answers").insert(rows).execute()
 
 
-def fetch_session_questions(session_id: str) -> list[dict]:
-    res = sb.table("quiz_answers").select("*").eq("session_id", session_id).order("id").execute()
-    return res.data or []
+def fetch_session_questions(session_id: str) -> List[Dict]:
+    return (
+        sb.table("quiz_answers")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("id")
+        .execute()
+        .data
+        or []
+    )
 
 
-def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None) -> None:
-    sb.table("quiz_answers").update({"chosen_option": chosen_letter}).eq("id", row_id).eq("session_id", session_id).execute()
-
-
-def finish_session(session_id: str) -> None:
-    sb.table("sessions").update({"finished_at": datetime.now(timezone.utc).isoformat()}).eq("id", session_id).execute()
+def update_chosen_option(row_id: int, chosen: str) -> None:
+    sb.table("quiz_answers").update({"chosen_option": chosen}).eq("id", row_id).execute()
 
 
 # =========================
-# STATE INIT
+# SESSION STATE DEFAULTS
 # =========================
-defaults = {
-    "logged": False,
-    "student": None,
-    "session_id": None,
-    "in_progress": False,
-    "started_ts": None,
-    "duration_seconds": 30 * 60,  # 30 minuti
-    "answers": {},  # {row_id: "A"/"B"/"C"/"D"}
-    "show_results": False,
-}
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+if "logged" not in st.session_state:
+    st.session_state["logged"] = False
+
+if "student" not in st.session_state:
+    st.session_state["student"] = None
+
+if "in_progress" not in st.session_state:
+    st.session_state["in_progress"] = False
+
+if "show_results" not in st.session_state:
+    st.session_state["show_results"] = False
+
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = None
+
+if "started_ts" not in st.session_state:
+    st.session_state["started_ts"] = None
+
+if "duration_seconds" not in st.session_state:
+    st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
 
 
 # =========================
 # UI
 # =========================
 st.title("🚓 Allenamento Quiz CDS")
-st.caption("Simulazione: 30 domande random dalla banca dati. Timer 30 minuti. Correzione finale.")
+st.caption("Simulazione 30 domande / 30 minuti. Correzione alla fine. Tutto salvato su Supabase.")
 
-tab_stud, tab_doc = st.tabs(["🎓 Studente", "🧑‍🏫 Docente (carica banca dati)"])
+tab_stud, tab_doc = st.tabs(["🎓 Studente", "🛠️ Docente (info)"])
 
 
-# =========================
-# DOCENTE TAB
-# =========================
 with tab_doc:
-    st.subheader("Carica banca dati quiz (CSV)")
+    st.subheader("Docente")
     st.write(
-        "Formato CSV richiesto (colonne obbligatorie): "
-        "`question_text, option_a, option_b, option_c, option_d, correct_option` "
-        "(correct_option deve essere A/B/C/D). Colonna facoltativa: `explanation`."
+        "Per ora il caricamento banca dati lo fai da Supabase (Table Editor → Import CSV). "
+        "Se vuoi, dopo automatizziamo un upload direttamente da app."
     )
-
-    admin = st.text_input("Codice docente", type="password")
-    up = st.file_uploader("Carica CSV domande", type=["csv"])
-
-    st.divider()
-    st.write("✅ Domande attualmente in banca dati:", fetch_bank_count())
-
-    if up and admin == ADMIN_CODE:
-        data_bytes = up.getvalue()
-
-        df = None
-        for enc in ("utf-8-sig", "utf-8", "latin1"):
-            try:
-                df = pd.read_csv(io.BytesIO(data_bytes), encoding=enc)
-                break
-            except Exception:
-                df = None
-
-        if df is None:
-            st.error("Impossibile leggere il CSV (encoding). Prova a salvarlo come UTF-8.")
-            st.stop()
-
-        required = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
-        missing = [c for c in required if c not in df.columns]
-        if missing:
-            st.error(f"Mancano colonne: {missing}")
-            st.stop()
-
-        if "explanation" not in df.columns:
-            df["explanation"] = ""
-
-        # normalizza
-        df = df.fillna("")
-        df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
-
-        # valida correct_option
-        ok_mask = df["correct_option"].isin(["A", "B", "C", "D"])
-        if not ok_mask.all():
-            st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D). Esempi:")
-            st.dataframe(df.loc[~ok_mask, ["question_text", "correct_option"]].head(10))
-            st.stop()
-
-        # se option_d è vuota, correct_option non può essere D
-        bad_d = (df["option_d"].astype(str).str.strip() == "") & (df["correct_option"] == "D")
-        if bad_d.any():
-            st.error("Trovate righe con correct_option = D ma option_d vuota. Correggi il CSV.")
-            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
-            st.stop()
-
-        rows = df[required + ["explanation"]].to_dict(orient="records")
-
-        try:
-            sb.table("question_bank").insert(rows).execute()
-            st.success(f"Caricate {len(rows)} domande ✅")
-            st.rerun()
-        except Exception as e:
-            st.error("Errore inserimento in DB (question_bank).")
-            st.exception(e)
-
-    elif up and admin != ADMIN_CODE:
-        st.warning("Codice docente errato.")
+    st.info("Suggerimento: usa la tabella `question_bank` come banca dati unica.")
 
 
-# =========================
-# STUDENTE TAB
-# =========================
 with tab_stud:
     st.subheader("Accesso studente")
 
-    class_code = st.text_input("Codice classe (es. CDS2026)")
-    nickname = st.text_input("Nickname (es. Mirko)")
+    if not st.session_state["logged"]:
+        class_code = st.text_input("Codice classe (es. CDS2026)")
+        nickname = st.text_input("Nickname (es. Mirko)")
 
-    if st.button("Entra"):
-        if not class_code or not nickname:
-            st.error("Inserisci codice classe e nickname.")
-        else:
-            try:
-                st.session_state["student"] = upsert_student(class_code, nickname)
-                st.session_state["logged"] = True
-                st.success("Accesso OK ✅")
-            except Exception as e:
-                st.error("Errore accesso/DB (students).")
-                st.exception(e)
-
-    if not st.session_state.get("logged"):
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("Entra"):
+                if not class_code or not nickname:
+                    st.error("Inserisci codice classe e nickname.")
+                else:
+                    try:
+                        st.session_state["student"] = upsert_student(class_code, nickname)
+                        st.session_state["logged"] = True
+                        st.success("Accesso OK ✅")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Errore accesso/DB (students).")
+                        st.exception(e)
         st.stop()
 
+    # LOGGATO
     student = st.session_state["student"]
+    st.success("Accesso OK ✅")
     st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
 
+    col_logout, col_space = st.columns([1, 6])
+    with col_logout:
+        if st.button("Logout"):
+            # reset pulito
+            st.session_state["logged"] = False
+            st.session_state["student"] = None
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = False
+            st.session_state["session_id"] = None
+            st.session_state["started_ts"] = None
+            st.rerun()
+
+    # controlla banca dati
     bank_count = fetch_bank_count()
-    if bank_count < 30:
-        st.warning(f"Banca dati troppo piccola: servono almeno 30 domande. Ora: {bank_count}")
+    st.write(f"📚 Domande in banca dati: **{bank_count}**")
+
+    if bank_count < N_QUESTIONS_DEFAULT:
+        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande in `question_bank`. Ora: {bank_count}")
         st.stop()
 
     st.divider()
 
-    # impostazioni simulazione
-    n_questions = 30
-    duration_seconds = 30 * 60
-
     # =========================
-    # START SIMULATION
+    # STATO 1: NON AVVIATA
     # =========================
     if not st.session_state["in_progress"] and not st.session_state["show_results"]:
         st.markdown("### Simulazione (30 domande – 30 minuti)")
+
         if st.button("Inizia simulazione"):
             try:
-                sess = create_session(student_id=student["id"], n_questions=n_questions, duration_seconds=duration_seconds)
+                n_questions = N_QUESTIONS_DEFAULT
+                duration_seconds = DURATION_SECONDS_DEFAULT
+
+                sess = create_session(student_id=student["id"], n_questions=n_questions)
                 st.session_state["session_id"] = sess["id"]
                 st.session_state["in_progress"] = True
                 st.session_state["show_results"] = False
-                st.session_state["answers"] = {}
                 st.session_state["started_ts"] = time.time()
+                st.session_state["duration_seconds"] = duration_seconds
 
                 all_q = fetch_all_bank_questions()
                 picked = random.sample(all_q, n_questions)
@@ -295,22 +268,19 @@ with tab_stud:
 
                 st.success("Simulazione avviata ✅")
                 st.rerun()
+
             except Exception as e:
                 st.error("Errore avvio simulazione.")
                 st.exception(e)
                 st.session_state["in_progress"] = False
                 st.stop()
 
+        st.stop()
+
     # =========================
-    # IN PROGRESS
+    # STATO 2: IN CORSO
     # =========================
     if st.session_state["in_progress"]:
-        # auto-refresh ogni 1 secondo (senza perdere session_state)
-        components.html(
-            "<script>setTimeout(() => window.parent.location.reload(), 1000);</script>",
-            height=0,
-        )
-
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
 
@@ -318,14 +288,14 @@ with tab_stud:
             st.error("Sessione senza domande in DB (quiz_answers vuota).")
             st.stop()
 
-        elapsed = int(time.time() - st.session_state["started_ts"])
-        remaining = max(0, st.session_state["duration_seconds"] - elapsed)
+        elapsed = int(time.time() - float(st.session_state["started_ts"]))
+        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
 
         mm = remaining // 60
         ss = remaining % 60
-        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
 
-        progress = 1.0 - (remaining / st.session_state["duration_seconds"])
+        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
+        progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
         st.progress(min(max(progress, 0.0), 1.0))
 
         if remaining <= 0:
@@ -342,35 +312,40 @@ with tab_stud:
             st.markdown(f"### Q{idx}")
             st.write(row["question_text"])
 
+            # normalizza: se D vuota/non esiste → non mostrarla
             options_map = {
-                "A": (row.get("option_a") or "").strip(),
-                "B": (row.get("option_b") or "").strip(),
-                "C": (row.get("option_c") or "").strip(),
-                "D": (row.get("option_d") or "").strip(),
+                "A": (row.get("option_a") or "").replace("\xa0", " ").strip(),
+                "B": (row.get("option_b") or "").replace("\xa0", " ").strip(),
+                "C": (row.get("option_c") or "").replace("\xa0", " ").strip(),
+                "D": (row.get("option_d") or "").replace("\xa0", " ").strip(),
             }
 
-            # MOSTRA SOLO opzioni con testo (se D è vuota, non compare)
-            letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
+            letters = []
+            for k in ["A", "B", "C", "D"]:
+                if options_map.get(k, "").strip() != "":
+                    letters.append(k)
 
             def fmt(letter: str) -> str:
                 return f"{letter}) {options_map[letter]}"
 
-            current = st.session_state["answers"].get(row["id"])
+            current = row.get("chosen_option")
+            if current not in letters:
+                current = None
 
-            chosen = st.radio(
+            choice = st.radio(
                 "Seleziona risposta",
                 options=letters,
+                index=letters.index(current) if current in letters else 0,
                 format_func=fmt,
-                index=(letters.index(current) if current in letters else 0),
-                key=f"row_{row['id']}",
-                horizontal=False,
+                key=f"q_{row['id']}",
             )
 
-            st.session_state["answers"][row["id"]] = chosen
-            try:
-                update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=chosen)
-            except Exception:
-                pass
+            # salva risposta subito (così non perdi nulla se aggiorna il timer)
+            if choice and choice != row.get("chosen_option"):
+                try:
+                    update_chosen_option(row["id"], choice)
+                except Exception:
+                    pass
 
             st.divider()
 
@@ -380,39 +355,43 @@ with tab_stud:
             finish_session(session_id)
             st.rerun()
 
+        # ✅ TIMER “LIVE” SENZA RELOAD (questa parte risolve il tuo problema login)
+        time.sleep(1)
+        st.rerun()
+
     # =========================
-    # RESULTS
+    # STATO 3: RISULTATI
     # =========================
     if st.session_state["show_results"]:
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
 
-        st.markdown("## ✅ Correzione finale")
+        st.markdown("## ✅ Correzione (fine simulazione)")
 
         score = 0
-        for idx, row in enumerate(rows, start=1):
-            chosen = row.get("chosen_option")
-            correct = row.get("correct_option")
-            ok = (chosen == correct)
+        total = 0
 
+        for idx, row in enumerate(rows, start=1):
+            correct = (row.get("correct_option") or "").strip().upper()
+            chosen = (row.get("chosen_option") or "").strip().upper()
+
+            total += 1
+            ok = (chosen == correct)
             if ok:
                 score += 1
 
-            st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
+            st.markdown(f"### Q{idx}")
             st.write(row["question_text"])
-            st.write(f"**Tua risposta:** {chosen or '-'}")
+            st.write(f"**Risposta data:** {chosen or '—'}")
             st.write(f"**Corretta:** {correct}")
-            if row.get("explanation"):
-                st.caption(row["explanation"])
+            st.write("✅ Esatta" if ok else "❌ Sbagliata")
             st.divider()
 
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**")
-        st.success("Sessione salvata nel database ✅")
+        st.success(f"📌 Punteggio finale: **{score} / {total}**")
 
         if st.button("Nuova simulazione"):
-            st.session_state["session_id"] = None
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = False
-            st.session_state["answers"] = {}
+            st.session_state["session_id"] = None
             st.session_state["started_ts"] = None
             st.rerun()
