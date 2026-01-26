@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Dict
 
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 from supabase import create_client, Client
 
 # =========================================================
@@ -123,6 +123,44 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # =========================================================
 N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
+
+# =========================================================
+# TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
+# =========================================================
+def render_live_timer(end_ts: float):
+    """
+    Mostra un countdown fluido aggiornato ogni 1s lato browser.
+    NON provoca rerun Streamlit -> niente schermo che scurisce.
+    """
+    end_ms = int(end_ts * 1000)
+    components.html(
+        f"""
+        <div style="margin: 0 0 10px 0;">
+          <div style="font-size: 20px; font-weight: 800; color:#111827;">
+            ⏱️ Tempo residuo: <span id="tval">--:--</span>
+          </div>
+        </div>
+        <script>
+          const end = {end_ms};
+
+          function pad(n) {{ return String(n).padStart(2,'0'); }}
+
+          function tick(){{
+            const now = Date.now();
+            let remaining = Math.max(0, Math.floor((end - now)/1000));
+
+            const m = Math.floor(remaining/60);
+            const s = remaining % 60;
+
+            document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
+          }}
+
+          tick();
+          setInterval(tick, 1000);
+        </script>
+        """,
+        height=40,
+    )
 
 # =========================================================
 # SUPABASE
@@ -464,15 +502,16 @@ with tab_stud:
         elapsed = int(time.time() - float(st.session_state["started_ts"]))
         remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
 
-        mm = remaining // 60
-        ss = remaining % 60
+        # TIMER SUPER FLUIDO (NO RERUN)
+        end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
+        render_live_timer(end_ts)
 
-        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
         progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
         st.progress(min(max(progress, 0.0), 1.0))
         st.divider()
 
-        if remaining <= 0:
+        # controllo scadenza (server-side, senza refresh forzato)
+        if time.time() >= end_ts:
             st.warning("Tempo scaduto! Correzione automatica…")
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
@@ -547,83 +586,78 @@ with tab_stud:
             finish_session(session_id)
             st.rerun()
 
-        # TIMER LIVE: aggiorna ogni secondo senza perdere login (session_state resta)
-# TIMER FLUIDO: refresh automatico ogni 1s (client-side)
-st_autorefresh(interval=1000, key="timer_tick")
+    # ---------- RESULTS ----------
+    if st.session_state["show_results"]:
+        session_id = st.session_state["session_id"]
+        rows = fetch_session_questions(session_id)
 
+        # calcolo punteggio
+        score = 0
+        for row in rows:
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+            if chosen and chosen == correct:
+                score += 1
 
-# ---------- RESULTS ----------
-if st.session_state["show_results"]:
-    session_id = st.session_state["session_id"]
-    rows = fetch_session_questions(session_id)
+        # tempo impiegato
+        start_ts = st.session_state.get("started_ts")
+        end_ts = st.session_state.get("finished_ts") or time.time()
+        elapsed_sec = int(max(0, float(end_ts) - float(start_ts))) if start_ts else 0
+        em = elapsed_sec // 60
+        es = elapsed_sec % 60
 
-    # calcolo punteggio
-    score = 0
-    for row in rows:
-        chosen = (row.get("chosen_option") or "").strip().upper()
-        correct = (row.get("correct_option") or "").strip().upper()
-        if chosen and chosen == correct:
-            score += 1
+        st.markdown("## ✅ Correzione finale")
 
-    # tempo impiegato
-    start_ts = st.session_state.get("started_ts")
-    end_ts = st.session_state.get("finished_ts") or time.time()
-    elapsed_sec = int(max(0, float(end_ts) - float(start_ts))) if start_ts else 0
-    em = elapsed_sec // 60
-    es = elapsed_sec % 60
-
-    st.markdown("## ✅ Correzione finale")
-
-    # RISULTATO SOPRA + TEMPO
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
-
-    st.divider()
-
-    def letter_to_text(row: dict, letter: str) -> str:
-        letter = (letter or "").strip().upper()
-        if letter == "A":
-            return (row.get("option_a") or "").strip()
-        if letter == "B":
-            return (row.get("option_b") or "").strip()
-        if letter == "C":
-            return (row.get("option_c") or "").strip()
-        if letter == "D":
-            return (row.get("option_d") or "").strip()
-        return ""
-
-    for idx, row in enumerate(rows, start=1):
-        chosen = (row.get("chosen_option") or "").strip().upper()
-        correct = (row.get("correct_option") or "").strip().upper()
-
-        chosen_text = letter_to_text(row, chosen) if chosen else ""
-        correct_text = letter_to_text(row, correct)
-
-        ok = (chosen != "" and chosen == correct)
-
-        st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
-        st.write(row["question_text"])
-
-        # MOSTRA LETTERA + TESTO (così capisci subito)
-        if chosen:
-            st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
-        else:
-            st.write("**Tua risposta:** — (non risposta)")
-
-        st.write(f"**Corretta:** {correct}) {correct_text}")
-
-        if row.get("explanation"):
-            st.caption(row["explanation"])
+        # RISULTATO SOPRA + TEMPO
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
 
         st.divider()
 
-    # RISULTATO SOTTO
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+        def letter_to_text(row: dict, letter: str) -> str:
+            letter = (letter or "").strip().upper()
+            if letter == "A":
+                return (row.get("option_a") or "").strip()
+            if letter == "B":
+                return (row.get("option_b") or "").strip()
+            if letter == "C":
+                return (row.get("option_c") or "").strip()
+            if letter == "D":
+                return (row.get("option_d") or "").strip()
+            return ""
 
-    if st.button("Nuova simulazione"):
-        st.session_state["session_id"] = None
-        st.session_state["in_progress"] = False
-        st.session_state["show_results"] = False
-        st.session_state["started_ts"] = None
-        st.session_state["finished_ts"] = None
-        st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
-        st.rerun()
+        for idx, row in enumerate(rows, start=1):
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+
+            chosen_text = letter_to_text(row, chosen) if chosen else ""
+            correct_text = letter_to_text(row, correct)
+
+            ok = (chosen != "" and chosen == correct)
+
+            st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
+            st.write(row["question_text"])
+
+            # MOSTRA LETTERA + TESTO (così capisci subito)
+            if chosen:
+                st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
+            else:
+                st.write("**Tua risposta:** — (non risposta)")
+
+            st.write(f"**Corretta:** {correct}) {correct_text}")
+
+            if row.get("explanation"):
+                st.caption(row["explanation"])
+
+            st.divider()
+
+        # RISULTATO SOTTO
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+
+        if st.button("Nuova simulazione"):
+            st.session_state["session_id"] = None
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = False
+            st.session_state["started_ts"] = None
+            st.session_state["finished_ts"] = None
+            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.rerun()
