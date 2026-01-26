@@ -617,9 +617,10 @@ def render_landing_login(total_questions: int):
 
 
 # Se NON loggato: mostro SOLO la landing WOW e STOP.
-if not st.session_state["logged"]:
-    render_landing_login(bank_count)
-    st.stop()
+# Sei già loggato perché la landing fa st.stop() se non loggato
+# quindi qui dentro arrivano SOLO utenti autenticati.
+st.subheader("Area corsista")
+
 
 # Se loggato: tutto come prima (header + tabs)
 render_header(bank_count)
