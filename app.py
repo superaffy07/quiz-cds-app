@@ -12,7 +12,7 @@ from supabase import create_client, Client
 # PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
 # =========================================================
 st.set_page_config(
-    page_title="Corso Polizia Locale — Simulazioni e Quiz",
+    page_title="Banca dati, simulazioni e quiz — Polizia Locale",
     page_icon="🚓",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -128,17 +128,6 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
   color: #111827;
   margin: 0 0 6px 0;
 }
-.quiz-question{
-  font-weight: 800;
-  font-size: 15px;
-  color: #111827;
-  margin: 0 0 8px 0;
-}
-.quiz-hint{
-  color: rgba(0,0,0,.55);
-  font-size: 12px;
-  margin-top: 6px;
-}
 
 /* =========================================
    BOTTONE ROSSO SOLO PER "TERMINA"
@@ -177,6 +166,12 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # =========================================================
 N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
+
+# =========================================================
+# ACCESSO CORSO (aggiunta richiesta)
+# =========================================================
+COURSE_PASSWORD = "polizia2026"             # <-- password richiesta per entrare
+COURSE_CLASS_CODE = "CORSO_PL_2026"         # <-- class_code fisso per compatibilità DB
 
 # =========================================================
 # TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
@@ -360,10 +355,10 @@ def render_header(total_questions: int):
     st.markdown(
         f"""
 <div class="hero">
-  <div class="hero-title">🚓 Corso Polizia Locale — Simulazioni e Quiz</div>
+  <div class="hero-title">🚓 Banca dati, simulazioni e quiz — Polizia Locale</div>
   <div class="hero-sub">
     Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
-    Simulazioni random • {N_QUESTIONS_DEFAULT} domande • Timer {DURATION_SECONDS_DEFAULT//60} minuti • Correzione finale dettagliata
+    Casi pratici • Quiz • Banca dati • {N_QUESTIONS_DEFAULT} domande • Timer {DURATION_SECONDS_DEFAULT//60} minuti • Correzione finale dettagliata
   </div>
   <div class="badges">
     <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
@@ -381,7 +376,7 @@ def render_header(total_questions: int):
 bank_count = fetch_bank_count()
 render_header(bank_count)
 
-tab_stud, tab_doc = st.tabs(["🎓 Studente", "🧑‍🏫 Docente (upload CSV)"])
+tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
 # =========================================================
 # DOCENTE
@@ -453,22 +448,25 @@ with tab_doc:
         st.warning("Codice docente errato.")
 
 # =========================================================
-# STUDENTE
+# CORSISTA
 # =========================================================
 with tab_stud:
-    st.subheader("Accesso studente")
+    st.subheader("Accesso corsista")
 
     # ---------- LOGIN ----------
     if not st.session_state["logged"]:
-        class_code = st.text_input("Codice classe (es. CDS2026)")
-        nickname = st.text_input("Nickname (es. Mirko)")
+        full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
+        course_pass = st.text_input("Password corso", type="password", help="Inserisci la password per accedere (es. polizia2026)")
 
         if st.button("Entra"):
-            if not class_code or not nickname:
-                st.error("Inserisci codice classe e nickname.")
+            if not full_name or not course_pass:
+                st.error("Inserisci Nome e Cognome + Password.")
+            elif course_pass != COURSE_PASSWORD:
+                st.error("Password errata. Riprova.")
             else:
                 try:
-                    st.session_state["student"] = upsert_student(class_code, nickname)
+                    # Salvo nel DB: nickname = Nome e Cognome, class_code fisso
+                    st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
                     st.session_state["logged"] = True
                     st.success("Accesso OK ✅")
                     st.rerun()
@@ -480,7 +478,7 @@ with tab_stud:
 
     student = st.session_state["student"]
 
-    st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
+    st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
 
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -553,7 +551,7 @@ with tab_stud:
         st.progress(min(max(progress, 0.0), 1.0))
         st.divider()
 
-        # controllo scadenza (server-side, senza refresh forzato)
+        # controllo scadenza
         if time.time() >= end_ts:
             st.warning("Tempo scaduto! Correzione automatica…")
             st.session_state["in_progress"] = False
@@ -574,7 +572,6 @@ with tab_stud:
         BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
 
         for idx, row in enumerate(rows, start=1):
-            # --- card più professionale, senza cambiare la logica ---
             st.markdown(
                 f"""
                 <div class="quiz-card">
@@ -584,7 +581,6 @@ with tab_stud:
                 unsafe_allow_html=True
             )
 
-            # DOMANDA IN GRASSETTO
             st.markdown(f"**{row['question_text']}**")
 
             options_map = {
@@ -594,23 +590,18 @@ with tab_stud:
                 "D": (row.get("option_d") or "").strip(),
             }
 
-            # MOSTRA SOLO OPZIONI CHE HANNO TESTO (D sparisce se vuota)
             letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
-
-            # per poter "non rispondere"
             radio_options = ["—"] + letters
 
             def fmt(opt: str) -> str:
                 if opt == "—":
                     return "— (lascia senza risposta)"
-                # A/B/C/D in "finto grassetto" per radio
                 return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
 
             current = (row.get("chosen_option") or "").strip().upper()
             if current not in letters:
                 current = "—"
 
-            # --- RADIO + SALVATAGGIO + STATO (FIX INDENTAZIONE) ---
             choice = st.radio(
                 "Seleziona risposta",
                 options=radio_options,
@@ -620,7 +611,6 @@ with tab_stud:
                 disabled=time_up,
             )
 
-            # salva (— = None)
             new_val = None if choice == "—" else choice
             old_val = (row.get("chosen_option") or None)
 
@@ -630,7 +620,6 @@ with tab_stud:
                 except Exception:
                     pass
 
-            # Stato risposta selezionata (pill professionale)
             if new_val is None:
                 st.markdown(
                     '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
@@ -644,7 +633,6 @@ with tab_stud:
 
             st.divider()
 
-        # BOTTONE TERMINA ROSSO PROFESSIONALE (solo questo)
         st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
         if st.button("Termina simulazione e vedi correzione"):
             st.session_state["in_progress"] = False
@@ -722,3 +710,47 @@ with tab_stud:
             st.session_state["finished_ts"] = None
             st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
             st.rerun()
+
+# =========================================================
+# (padding lines - non rimuovere nulla)
+# =========================================================
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
