@@ -617,7 +617,6 @@ if new_val is None:
 else:
     st.caption(f"📝 **Stato risposta:** ✅ Hai selezionato la risposta **{new_val}**")
 
-
 st.divider()
 
         # BOTTONE TERMINA ROSSO PROFESSIONALE (solo questo)
