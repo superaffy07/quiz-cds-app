@@ -613,15 +613,61 @@ with tab_stud:
         st.stop()
 
     # =========================================================
-    # BANCA DATI (placeholder, NO timer)
-    # =========================================================
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
-        st.markdown("## 📚 Banca dati")
-        st.caption("Qui faremo la modalità studio senza timer. Per ora è una schermata base, poi aggiungiamo filtri per argomenti e ricerca.")
+# TAB 2 - BANCA DATI (PDF materiali di studio)
+# =========================================================
+with tabs[1]:
+    st.session_state["menu_page"] = "bank"
 
-        if bank_count <= 0:
-            st.warning("La banca dati è vuota: carica un CSV dal tab Docente.")
+    if (
+        not st.session_state.get("in_progress")
+        and not st.session_state.get("show_results")
+        and st.session_state.get("menu_page") == "bank"
+    ):
+        st.markdown("## 📚 Banca dati")
+        st.caption("Materiali di studio consultabili (PDF).")
+
+        # Stato selezione documento
+        if "bank_doc" not in st.session_state:
+            st.session_state["bank_doc"] = None
+
+        # Documenti disponibili
+        docs = [
+            {
+                "title": "LEGGE QUADRO (Legge 7 marzo 1986, n. 65)",
+                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/legge%20quadro%20completa.pdf",
+            },
+            {
+                "title": "CODICE DELLA STRADA (D.Lgs. 30 aprile 1992, n. 285)",
+                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/cds%20completo.pdf",
+            },
+        ]
+
+        # Lista argomenti
+        if st.session_state["bank_doc"] is None:
+            st.markdown("### Seleziona un argomento")
+            for d in docs:
+                if st.button(d["title"], use_container_width=True):
+                    st.session_state["bank_doc"] = d
+                    st.rerun()
+
             st.stop()
+
+        # Visualizzazione PDF
+        d = st.session_state["bank_doc"]
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("⬅️ Torna agli argomenti", use_container_width=True):
+                st.session_state["bank_doc"] = None
+                st.rerun()
+
+        with col2:
+            st.link_button("Apri PDF in nuova scheda", d["url"], use_container_width=True)
+
+        st.markdown(f"### {d['title']}")
+        components.iframe(d["url"], height=820, scrolling=True)
+
+        st.stop()
 
         # preview semplice (non cambia nulla del resto)
         st.info("Anteprima: visualizzo le prime 20 domande (modalità base).")
