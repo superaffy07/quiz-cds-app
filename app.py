@@ -589,70 +589,7 @@ with tab_stud:
         )
         with c2:
             if st.button("➡️ Vai alla Banca dati"):
-                if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
-    st.markdown("## 📚 Banca dati")
-    st.caption("Seleziona un argomento per aprire il materiale di studio. (PDF consultabile)")
-
-    # 1) leggo lista argomenti
-    topics = (
-        sb.table("study_topics")
-        .select("*")
-        .eq("is_active", True)
-        .order("sort_order")
-        .execute()
-        .data
-        or []
-    )
-
-    if not topics:
-        st.warning("Nessun argomento caricato. Carica i PDF su Storage e inserisci le righe in study_topics.")
-        st.stop()
-
-    # 2) se non ho selezionato un argomento: mostra lista
-    if "selected_topic_id" not in st.session_state:
-        st.session_state["selected_topic_id"] = None
-
-    if st.session_state["selected_topic_id"] is None:
-        for t in topics:
-            colA, colB = st.columns([6, 1])
-            with colA:
-                st.markdown(f"### {t['title']}")
-                if t.get("subtitle"):
-                    st.caption(t["subtitle"])
-            with colB:
-                if st.button("Apri", key=f"open_topic_{t['id']}"):
-                    st.session_state["selected_topic_id"] = t["id"]
-                    st.rerun()
-
-        st.stop()
-
-    # 3) visualizza argomento selezionato
-    topic = next((x for x in topics if x["id"] == st.session_state["selected_topic_id"]), None)
-    if not topic:
-        st.session_state["selected_topic_id"] = None
-        st.rerun()
-
-    st.markdown(f"## {topic['title']}")
-    if topic.get("subtitle"):
-        st.caption(topic["subtitle"])
-
-    if st.button("⬅️ Indietro agli argomenti"):
-        st.session_state["selected_topic_id"] = None
-        st.rerun()
-
-    st.divider()
-
-    # 4) embed PDF dentro pagina
-    pdf_url = topic["pdf_url"]
-    st.markdown(
-        f"""
-        <iframe src="{pdf_url}" width="100%" height="800px" style="border:1px solid rgba(0,0,0,.08); border-radius:12px;"></iframe>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.stop()
-
+                st.session_state["menu_page"] = "bank"
                 st.rerun()
 
         st.markdown(
