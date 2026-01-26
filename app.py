@@ -604,11 +604,6 @@ with tab_stud:
             if new_val != old_val:
                 try:
                     update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
-# Stato risposta selezionata (più professionale)
-                if new_val is None:
-                st.caption("📝 **Stato:** Non hai risposto")
-                else:
-                st.caption(f"📝 **Stato:** Risposta selezionata → **{new_val}**")
 
                 except Exception:
                     pass
