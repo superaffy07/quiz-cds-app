@@ -1,514 +1,392 @@
 import os
 import time
-import random
+import uuid
 from datetime import datetime, timezone
-from typing import List, Dict
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from supabase import create_client, Client
+from supabase import create_client
+
 
 # =========================================================
-# PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
+# CONFIG
 # =========================================================
 st.set_page_config(
-    page_title="Corso Polizia Locale — Simulazioni e Quiz",
+    page_title="Simulazioni & Quiz — Polizia Locale",
     page_icon="🚓",
     layout="wide",
-    initial_sidebar_state="collapsed",
 )
 
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL"))
+SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
+ADMIN_CODE = st.secrets.get("ADMIN_CODE", os.getenv("ADMIN_CODE", "DOCENTE1"))
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    st.error("❌ Mancano SUPABASE_URL e/o SUPABASE_ANON_KEY nelle Secrets/Env.")
+    st.stop()
+
+sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+SIM_QUESTIONS = 30
+SIM_DURATION_SECONDS = 30 * 60  # 30 minuti
+
+
 # =========================================================
-# STILI (NO BLU, MODERNO, LEGGIBILE)
+# CSS (non blu, leggibile)
 # =========================================================
-CUSTOM_CSS = """
+st.markdown(
+    """
 <style>
-/* layout */
-.block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
-
-/* background chiaro pulito */
-.stApp { background: #f6f7fb; }
-
-/* card header */
-.hero {
-  background: white;
-  border: 1px solid rgba(0,0,0,.06);
-  border-radius: 18px;
-  padding: 18px 18px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.06);
-  margin-bottom: 18px;
+:root{
+  --bg:#ffffff;
+  --text:#0b1220;
+  --muted:#5b6473;
+  --card:#ffffff;
+  --border:rgba(0,0,0,.08);
+  --shadow:0 8px 24px rgba(0,0,0,.06);
+  --primary:#111827;
+  --danger:#dc2626;
 }
-.hero-title {
-  font-size: 30px;
+
+.block-container{padding-top: 24px; padding-bottom: 24px;}
+h1,h2,h3,h4{color:var(--text);}
+p,li,span,div{color:var(--text);}
+
+.header-wrap{
+  padding:18px 18px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.03), rgba(0,0,0,0.00));
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+.header-title{
+  font-size: 28px;
   font-weight: 800;
-  margin: 0;
   letter-spacing: .2px;
-  color: #111827;
+  margin: 0;
 }
-.hero-sub {
-  margin: 6px 0 0 0;
-  color: #4b5563;
+.header-sub{
+  margin-top: 6px;
+  color: var(--muted);
   font-size: 14px;
-  line-height: 1.4;
 }
-.badges { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
-.badge {
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.08);
-  background: #fbfbfd;
-  color: #111827;
+
+.badge-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;}
+.badge{
   display:inline-flex;
   align-items:center;
   gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(0,0,0,0.03);
+  font-size: 12.5px;
+  color: var(--text);
 }
 
-/* tabs */
-.stTabs [data-baseweb="tab-list"] {
-  gap: 10px;
-  padding: 8px 6px;
-  border-radius: 14px;
-  background: white;
-  border: 1px solid rgba(0,0,0,.06);
-}
-.stTabs [data-baseweb="tab"] {
-  border-radius: 12px;
-  padding: 10px 14px;
-  color: #374151;
-  font-weight: 600;
-}
-.stTabs [aria-selected="true"] {
-  background: #f3f4f6 !important;
-  border: 1px solid rgba(0,0,0,.08) !important;
-}
-
-/* buttons (base) */
-.stButton > button {
-  border-radius: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(0,0,0,.10);
-  background: white;
-  color: #111827;
-  transition: all .12s ease-in-out;
-  font-weight: 700;
-}
-.stButton > button:hover {
-  transform: translateY(-1px);
-  background: #f9fafb;
-}
-
-/* RADIO / INPUTS */
-div[data-baseweb="input"] > div { border-radius: 12px !important; }
-.stRadio label { color: #111827; }
-
-/* alert */
-div[data-testid="stAlert"] {
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,.08);
-}
-
-/* divider */
-hr { border-top: 1px solid rgba(0,0,0,.08); }
-
-/* =========================================
-   QUIZ CARD LOOK (solo estetica, logica invariata)
-   ========================================= */
 .quiz-card{
-  background: white;
-  border: 1px solid rgba(0,0,0,.06);
+  border:1px solid var(--border);
+  background: var(--card);
   border-radius: 16px;
-  box-shadow: 0 8px 22px rgba(0,0,0,.05);
-  padding: 14px 14px 10px 14px;
-  margin: 10px 0 12px 0;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
 }
 .quiz-title{
-  font-weight: 850;
-  font-size: 16px;
-  color: #111827;
-  margin: 0 0 6px 0;
-}
-.quiz-question{
   font-weight: 800;
-  font-size: 15px;
-  color: #111827;
-  margin: 0 0 8px 0;
+  font-size: 18px;
+  margin-bottom: 8px;
 }
-.quiz-hint{
-  color: rgba(0,0,0,.55);
-  font-size: 12px;
-  margin-top: 6px;
+.quiz-q{
+  font-size: 16px;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+.small-muted{color: var(--muted); font-size: 13px;}
+
+.timer-box{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px 14px;
+  background: rgba(0,0,0,0.02);
+  margin: 8px 0 14px 0;
+}
+.timer-left{display:flex; gap:10px; align-items:center;}
+.timer-label{font-size:13px; color:var(--muted);}
+.timer-value{font-size:18px; font-weight:800;}
+
+.end-btn-wrap{
+  display:flex;
+  justify-content:flex-end;
+  margin-top: 10px;
+}
+.end-btn-wrap button{
+  background: var(--danger) !important;
+  color: white !important;
+  border: 0 !important;
+}
+.end-btn-wrap button:hover{
+  filter: brightness(0.95);
 }
 
-/* =========================================
-   BOTTONE ROSSO SOLO PER "TERMINA"
-   (usiamo classi CSS attaccate al container)
-   ========================================= */
-.end-btn-wrap .stButton > button{
-  background: #b42318 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(0,0,0,.12) !important;
-  box-shadow: 0 10px 22px rgba(180,35,24,.22) !important;
+.result-card{
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  background: var(--card);
+  margin-top: 12px;
 }
-.end-btn-wrap .stButton > button:hover{
-  background: #9b1c14 !important;
-  transform: translateY(-1px);
-}
+.correct{color:#16a34a; font-weight:800;}
+.wrong{color:#dc2626; font-weight:800;}
+.neutral{color:#6b7280; font-weight:800;}
+
+.status-pill{padding:8px 12px;border-radius:12px;margin-top:8px;margin-bottom:8px;font-size:0.95rem;border:1px solid rgba(0,0,0,0.06);}
+.status-pill.ok{background:rgba(16,185,129,0.12);}
+.status-pill.warn{background:rgba(245,158,11,0.14);}
+
+.kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px 0;}
+.kpi-pill{background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.06);padding:6px 10px;border-radius:999px;font-size:0.92rem;}
 </style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 # =========================================================
-# COSTANTI
+# Helpers
 # =========================================================
-N_QUESTIONS_DEFAULT = 30
-DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
+BOLD_LETTER = {"A": "**A)**", "B": "**B)**", "C": "**C)**", "D": "**D)**"}
 
-# =========================================================
-# TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
-# =========================================================
-def render_live_timer(end_ts: float):
-    """
-    Mostra un countdown fluido aggiornato ogni 1s lato browser.
-    NON provoca rerun Streamlit -> niente schermo che scurisce.
-    """
-    end_ms = int(end_ts * 1000)
-    components.html(
-        f"""
-        <div style="margin: 0 0 10px 0;">
-          <div style="font-size: 20px; font-weight: 800; color:#111827;">
-            ⏱️ Tempo residuo: <span id="tval">--:--</span>
-          </div>
-        </div>
-        <script>
-          const end = {end_ms};
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
-          function pad(n) {{ return String(n).padStart(2,'0'); }}
+def format_mmss(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    m = seconds // 60
+    s = seconds % 60
+    return f"{m:02d}:{s:02d}"
 
-          function tick(){{
-            const now = Date.now();
-            let remaining = Math.max(0, Math.floor((end - now)/1000));
-            const m = Math.floor(remaining/60);
-            const s = remaining % 60;
-            document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
-          }}
+def safe_str(x) -> str:
+    return "" if x is None else str(x).strip()
 
-          tick();
-          setInterval(tick, 1000);
-        </script>
-        """,
-        height=40,
-    )
+def get_secret(name: str, default=None):
+    return st.secrets.get(name, os.getenv(name, default))
 
-# =========================================================
-# SUPABASE
-# =========================================================
-def get_secret(name: str, default: str = "") -> str:
-    try:
-        v = st.secrets.get(name, default)
-        if v:
-            return v
-    except Exception:
-        pass
-    return os.getenv(name, default)
+def upsert_student(class_code: str, nickname: str) -> dict:
+    payload = {"class_code": class_code, "nickname": nickname}
+    res = sb.table("students").upsert(payload, on_conflict="class_code,nickname").select("*").execute()
+    if not res.data:
+        raise RuntimeError("Impossibile creare/recuperare studente.")
+    return res.data[0]
 
-SUPABASE_URL = get_secret("SUPABASE_URL")
-SUPABASE_ANON_KEY = get_secret("SUPABASE_ANON_KEY")
-ADMIN_CODE = get_secret("ADMIN_CODE", "DOCENTE123")
-
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    st.error("Mancano SUPABASE_URL / SUPABASE_ANON_KEY nelle Secrets (o env).")
-    st.stop()
-
-sb: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-# =========================================================
-# DB HELPERS
-# =========================================================
-def upsert_student(class_code: str, nickname: str) -> Dict:
-    class_code = class_code.strip()
-    nickname = nickname.strip()
-
-    res = (
-        sb.table("students")
-        .select("*")
-        .eq("class_code", class_code)
-        .eq("nickname", nickname)
-        .limit(1)
-        .execute()
-        .data
-    )
-    if res:
-        return res[0]
-
-    ins = sb.table("students").insert({"class_code": class_code, "nickname": nickname}).execute().data
-    return ins[0]
-
-def create_session(student_id: int, n_questions: int) -> Dict:
-    payload = {
-        "student_id": student_id,
-        "mode": "sim",
-        "topic_scope": "bank",
-        "selected_topic_id": None,
-        "n_questions": int(n_questions),
-        "started_at": datetime.now(timezone.utc).isoformat(),
-    }
-    return sb.table("sessions").insert(payload).execute().data[0]
-
-def finish_session(session_id: str) -> None:
-    sb.table("sessions").update({"finished_at": datetime.now(timezone.utc).isoformat()}).eq("id", session_id).execute()
-
-def fetch_bank_count() -> int:
-    res = sb.table("question_bank").select("id", count="exact").limit(1).execute()
+def count_question_bank() -> int:
+    res = sb.table("question_bank").select("id", count="exact").execute()
     return int(res.count or 0)
 
-def fetch_all_bank_questions() -> List[Dict]:
-    return sb.table("question_bank").select("*").order("id").execute().data or []
+def fetch_random_questions(n: int) -> list[dict]:
+    # semplice: prende più righe e poi campiona lato python
+    res = sb.table("question_bank").select("*").execute()
+    data = res.data or []
+    if len(data) < n:
+        raise RuntimeError(f"Banca dati insufficiente: trovate {len(data)} domande, servono {n}.")
+    import random
+    return random.sample(data, n)
 
-def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
+def create_session(student_id: int) -> dict:
+    payload = {
+        "student_id": student_id,
+        "mode": "quiz",
+        "topic_scope": "all",
+        "selected_topic_id": None,
+        "n_questions": SIM_QUESTIONS,
+        "started_at": now_utc().isoformat(),
+    }
+    res = sb.table("sessions").insert(payload).select("*").execute()
+    return res.data[0]
+
+def insert_session_questions(session_id: str, questions: list[dict]) -> None:
     rows = []
     for q in questions:
-        qa = (q.get("question_text") or "").strip()
-        oa = (q.get("option_a") or "").strip()
-        ob = (q.get("option_b") or "").strip()
-        oc = (q.get("option_c") or "").strip()
-        od = (q.get("option_d") or "").strip()
-
-        co = (q.get("correct_option") or "").strip().upper()
-        if co not in ["A", "B", "C", "D"]:
-            co = "A"
-
-        if od == "" and co == "D":
-            if oc:
-                co = "C"
-            elif ob:
-                co = "B"
-            else:
-                co = "A"
-
+        # option_d può essere vuota -> salviamo stringa vuota (NON NULL)
         rows.append(
             {
                 "session_id": session_id,
                 "topic_id": None,
-                "question_text": qa,
-                "option_a": oa,
-                "option_b": ob,
-                "option_c": oc,
-                "option_d": od if od else "",
-                "correct_option": co,
+                "question_text": safe_str(q.get("question_text")),
+                "option_a": safe_str(q.get("option_a")),
+                "option_b": safe_str(q.get("option_b")),
+                "option_c": safe_str(q.get("option_c")),
+                "option_d": safe_str(q.get("option_d")),  # ok anche ""
+                "correct_option": safe_str(q.get("correct_option")).upper(),
                 "chosen_option": None,
-                "explanation": (q.get("explanation") or "").strip(),
+                "explanation": safe_str(q.get("explanation")),
             }
         )
-
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
 
-def fetch_session_questions(session_id: str) -> List[Dict]:
-    return (
+def fetch_session_questions(session_id: str) -> list[dict]:
+    res = (
         sb.table("quiz_answers")
         .select("*")
         .eq("session_id", session_id)
-        .order("id")
+        .order("id", desc=False)
         .execute()
-        .data
-        or []
     )
+    return res.data or []
 
-def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None) -> None:
-    sb.table("quiz_answers").update({"chosen_option": chosen_letter}).eq("id", row_id).eq("session_id", session_id).execute()
+def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None):
+    payload = {"chosen_option": chosen_letter}
+    sb.table("quiz_answers").update(payload).eq("id", row_id).eq("session_id", session_id).execute()
+
+def finish_session(session_id: str):
+    sb.table("sessions").update({"finished_at": now_utc().isoformat()}).eq("id", session_id).execute()
+
+def compute_score(rows: list[dict]) -> tuple[int, int]:
+    total = len(rows)
+    correct = 0
+    for r in rows:
+        if safe_str(r.get("chosen_option")).upper() == safe_str(r.get("correct_option")).upper():
+            correct += 1
+    return correct, total
+
 
 # =========================================================
-# SESSION STATE
+# JS Timer (fluido senza scurire / rerun aggressivo)
 # =========================================================
-def ss_init():
-    defaults = {
-        "logged": False,
-        "student": None,
-        "session_id": None,
-        "in_progress": False,
-        "show_results": False,
-        "started_ts": None,
-        "finished_ts": None,
-        "duration_seconds": DURATION_SECONDS_DEFAULT,
-        "n_questions": N_QUESTIONS_DEFAULT,
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+def timer_component(end_ts: float, key: str = "timer"):
+    """
+    Timer fluido lato client.
+    - mostra il countdown aggiornato ogni secondo
+    - quando scade, setta window.streamlitSetComponentValue("DONE")
+    """
+    html = f"""
+    <div class="timer-box">
+      <div class="timer-left">
+        <div style="font-size:20px;">⏱️</div>
+        <div>
+          <div class="timer-label">Tempo residuo</div>
+          <div class="timer-value" id="timer_val">--:--</div>
+        </div>
+      </div>
+      <div class="timer-label">Simulazione: {SIM_QUESTIONS} domande — {SIM_DURATION_SECONDS//60} minuti</div>
+    </div>
 
-ss_init()
+    <script>
+      const endTs = {end_ts};
+      const el = document.getElementById("timer_val");
+
+      function pad(n){{ return (n<10? "0":"") + n; }}
+      function render() {{
+        const now = Date.now()/1000;
+        let diff = Math.max(0, Math.floor(endTs - now));
+        const m = Math.floor(diff/60);
+        const s = diff % 60;
+        el.textContent = pad(m) + ":" + pad(s);
+        if(diff <= 0) {{
+          // segnala a Streamlit che è finito
+          const msg = {{isStreamlitMessage: true, type: "streamlit:setComponentValue", value: "DONE"}};
+          window.parent.postMessage(msg, "*");
+        }}
+      }}
+      render();
+      setInterval(render, 1000);
+    </script>
+    """
+    return components.html(html, height=90, key=key)
+
 
 # =========================================================
 # HEADER
 # =========================================================
-def render_header(total_questions: int):
-    st.markdown(
-        f"""
-<div class="hero">
-  <div class="hero-title">🚓 Corso Polizia Locale — Simulazioni e Quiz</div>
-  <div class="hero-sub">
-    Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
-    Simulazioni random • {N_QUESTIONS_DEFAULT} domande • Timer {DURATION_SECONDS_DEFAULT//60} minuti • Correzione finale dettagliata
-  </div>
-  <div class="badges">
-    <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
-    <div class="badge">⏱️ <strong>Tempo</strong>: {DURATION_SECONDS_DEFAULT//60} minuti</div>
-    <div class="badge">✅ <strong>Valutazione</strong>: 1 punto per risposta esatta</div>
+st.markdown(
+    """
+<div class="header-wrap">
+  <div class="header-title">🚓 Simulazioni & Quiz — Polizia Locale</div>
+  <div class="header-sub">Piattaforma didattica a cura di <b>Raffaele Sotero</b> • banca dati in crescita • correzione finale</div>
+  <div class="badge-row">
+    <div class="badge">📚 30 domande random</div>
+    <div class="badge">⏱️ Timer 30 minuti</div>
+    <div class="badge">✅ Correzione finale</div>
   </div>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+    unsafe_allow_html=True,
+)
+
 
 # =========================================================
-# APP
+# STATE INIT
 # =========================================================
-bank_count = fetch_bank_count()
-render_header(bank_count)
+if "logged" not in st.session_state:
+    st.session_state["logged"] = False
+if "student" not in st.session_state:
+    st.session_state["student"] = None
+if "active_session_id" not in st.session_state:
+    st.session_state["active_session_id"] = None
+if "sim_end_ts" not in st.session_state:
+    st.session_state["sim_end_ts"] = None
+if "show_correction" not in st.session_state:
+    st.session_state["show_correction"] = False
 
-tab_stud, tab_doc = st.tabs(["🎓 Studente", "🧑‍🏫 Docente (upload CSV)"])
-
-# =========================================================
-# DOCENTE
-# =========================================================
-with tab_doc:
-    st.subheader("Carica banca dati (CSV)")
-    st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
-    st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
-
-    admin = st.text_input("Codice docente", type="password")
-    up = st.file_uploader("Carica CSV", type=["csv"])
-
-    st.divider()
-    st.write("Domande in banca dati:", fetch_bank_count())
-
-    if up and admin == ADMIN_CODE:
-        import pandas as pd
-        import io
-
-        raw = up.getvalue()
-        df = None
-        for enc in ("utf-8-sig", "utf-8", "latin1"):
-            try:
-                df = pd.read_csv(io.BytesIO(raw), encoding=enc)
-                break
-            except Exception:
-                df = None
-
-        if df is None:
-            st.error("Impossibile leggere il CSV. Salvalo come UTF-8.")
-            st.stop()
-
-        required = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
-        miss = [c for c in required if c not in df.columns]
-        if miss:
-            st.error(f"Mancano colonne: {miss}")
-            st.stop()
-
-        if "explanation" not in df.columns:
-            df["explanation"] = ""
-
-        df = df.fillna("")
-        df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
-        df["option_d"] = df["option_d"].astype(str).fillna("").str.strip()
-
-        bad = ~df["correct_option"].isin(["A", "B", "C", "D"])
-        if bad.any():
-            st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D).")
-            st.dataframe(df.loc[bad, ["question_text", "correct_option"]].head(10))
-            st.stop()
-
-        bad_d = (df["option_d"] == "") & (df["correct_option"] == "D")
-        if bad_d.any():
-            st.error("Righe con correct_option = D ma option_d vuota. Correggi il CSV.")
-            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
-            st.stop()
-
-        rows = df[required + ["explanation"]].to_dict(orient="records")
-
-        try:
-            sb.table("question_bank").insert(rows).execute()
-            st.success(f"Caricate {len(rows)} domande ✅")
-            st.rerun()
-        except Exception as e:
-            st.error("Errore inserimento in question_bank.")
-            st.exception(e)
-
-    elif up and admin != ADMIN_CODE:
-        st.warning("Codice docente errato.")
 
 # =========================================================
-# STUDENTE
+# STUDENT LOGIN
 # =========================================================
-with tab_stud:
+with st.container():
     st.subheader("Accesso studente")
+    class_code = st.text_input("Codice classe", value="CDS2026")
+    nickname = st.text_input("Nickname (es. Mirko)")
 
-    # ---------- LOGIN ----------
-    if not st.session_state["logged"]:
-        class_code = st.text_input("Codice classe (es. CDS2026)")
-        nickname = st.text_input("Nickname (es. Mirko)")
-
-        if st.button("Entra"):
+    colA, colB = st.columns([1, 2])
+    with colA:
+        if st.button("Entra ✅"):
             if not class_code or not nickname:
                 st.error("Inserisci codice classe e nickname.")
             else:
-                try:
-                    st.session_state["student"] = upsert_student(class_code, nickname)
-                    st.session_state["logged"] = True
-                    st.success("Accesso OK ✅")
-                    st.rerun()
-                except Exception as e:
-                    st.error("Errore accesso.")
-                    st.exception(e)
+                st.session_state["student"] = upsert_student(class_code.strip(), nickname.strip())
+                st.session_state["logged"] = True
+                st.success("Accesso OK ✅")
 
-        st.stop()
+    if st.session_state.get("logged"):
+        student = st.session_state["student"]
+        st.info(f"Connesso come: **{student['nickname']}** (classe **{student['class_code']}**)")
 
-    student = st.session_state["student"]
-
-    st.info(f"Connesso come: {student['nickname']} (classe {student['class_code']})")
-
-    col1, col2 = st.columns([1, 4])
-    with col1:
         if st.button("Logout"):
             st.session_state["logged"] = False
             st.session_state["student"] = None
-            st.session_state["session_id"] = None
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = False
-            st.session_state["started_ts"] = None
-            st.session_state["finished_ts"] = None
-            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["active_session_id"] = None
+            st.session_state["sim_end_ts"] = None
+            st.session_state["show_correction"] = False
             st.rerun()
 
-    bank_count = fetch_bank_count()
-    st.write(f"📚 Domande in banca dati: **{bank_count}**")
+        st.caption(f"📦 Domande in banca dati: **{count_question_bank()}**")
 
-    if bank_count < N_QUESTIONS_DEFAULT:
-        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande. Ora: {bank_count}")
-        st.stop()
 
-    st.divider()
+# =========================================================
+# SIMULAZIONE
+# =========================================================
+if st.session_state.get("logged"):
+    st.markdown("---")
+    st.header("Simulazione (30 domande — 30 minuti)")
 
-    # ---------- START ----------
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]):
-        st.markdown("### Simulazione (30 domande – 30 minuti)")
-        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer scorre in tempo reale.")
-
+    # Avvio simulazione
+    if st.session_state["active_session_id"] is None and not st.session_state["show_correction"]:
         if st.button("Inizia simulazione"):
             try:
-                sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS_DEFAULT)
-                st.session_state["session_id"] = sess["id"]
-                st.session_state["in_progress"] = True
-                st.session_state["show_results"] = False
-                st.session_state["started_ts"] = time.time()
-                st.session_state["finished_ts"] = None
-                st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
-
-                all_q = fetch_all_bank_questions()
-                picked = random.sample(all_q, N_QUESTIONS_DEFAULT)
-
+                sess = create_session(st.session_state["student"]["id"])
+                picked = fetch_random_questions(SIM_QUESTIONS)
                 insert_session_questions(sess["id"], picked)
+
+                st.session_state["active_session_id"] = sess["id"]
+                st.session_state["sim_end_ts"] = time.time() + SIM_DURATION_SECONDS
+                st.session_state["show_correction"] = False
 
                 st.success("Simulazione avviata ✅")
                 st.rerun()
@@ -516,78 +394,82 @@ with tab_stud:
                 st.error("Errore avvio simulazione.")
                 st.exception(e)
 
-        st.stop()
+    # Sessione in corso / Correzione
+    session_id = st.session_state.get("active_session_id")
+    end_ts = st.session_state.get("sim_end_ts")
 
-    # ---------- IN PROGRESS ----------
-    if st.session_state["in_progress"]:
-        session_id = st.session_state["session_id"]
-        rows = fetch_session_questions(session_id)
+    if session_id and end_ts and not st.session_state["show_correction"]:
+        remaining = int(end_ts - time.time())
 
-        if not rows:
-            st.error("Sessione senza domande (quiz_answers vuota).")
-            st.stop()
+        # Timer fluido (client)
+        timer_status = timer_component(end_ts=end_ts, key=f"timer_{session_id}")
 
-        elapsed = int(time.time() - float(st.session_state["started_ts"]))
-        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
-
-        # TIMER SUPER FLUIDO (NO RERUN)
-        end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
-        render_live_timer(end_ts)
-
-        progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
-        st.progress(min(max(progress, 0.0), 1.0))
-        st.divider()
-
-        # controllo scadenza (server-side, senza refresh forzato)
-        if time.time() >= end_ts:
-            st.warning("Tempo scaduto! Correzione automatica…")
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = True
-            st.session_state["finished_ts"] = time.time()
+        # Se scaduto -> correzione
+        if remaining <= 0 or timer_status == "DONE":
             finish_session(session_id)
+            st.session_state["show_correction"] = True
             st.rerun()
 
-        st.markdown("## 📝 Sessione in corso")
+        # Carico domande
+        rows = fetch_session_questions(session_id)
 
-        # Lettere "bold" compatibili con radio (no markdown)
-        BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
+        # KPI in alto: risposte date / totali
+        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
+        st.markdown(
+            f'''
+            <div class="kpi-row">
+              <span class="kpi-pill">✅ Risposte date: <b>{answered}/{len(rows)}</b></span>
+              <span class="kpi-pill">⏱️ Tempo residuo: <b>{format_mmss(max(0, int(end_ts - time.time())))}</b></span>
+            </div>
+            ''',
+            unsafe_allow_html=True,
+        )
+
+        # progress
+        progress = answered / max(1, len(rows))
+        st.progress(progress)
+        st.divider()
+
+        time_up = time.time() >= end_ts
 
         for idx, row in enumerate(rows, start=1):
-            # --- card più professionale, senza cambiare la logica ---
-            st.markdown(
-                f"""
-                <div class="quiz-card">
-                  <div class="quiz-title">Domanda n°{idx}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            q_text = safe_str(row.get("question_text"))
 
-            # DOMANDA IN GRASSETTO
-            st.markdown(f"**{row['question_text']}**")
+            opt_a = safe_str(row.get("option_a"))
+            opt_b = safe_str(row.get("option_b"))
+            opt_c = safe_str(row.get("option_c"))
+            opt_d = safe_str(row.get("option_d"))
 
-            options_map = {
-                "A": (row.get("option_a") or "").strip(),
-                "B": (row.get("option_b") or "").strip(),
-                "C": (row.get("option_c") or "").strip(),
-                "D": (row.get("option_d") or "").strip(),
-            }
+            options = []
+            if opt_a:
+                options.append(("A", opt_a))
+            if opt_b:
+                options.append(("B", opt_b))
+            if opt_c:
+                options.append(("C", opt_c))
+            if opt_d:
+                options.append(("D", opt_d))
 
-            # MOSTRA SOLO OPZIONI CHE HANNO TESTO (D sparisce se vuota)
-            letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
-
-            # per poter "non rispondere"
-            radio_options = ["—"] + letters
-
-            def fmt(opt: str) -> str:
-                if opt == "—":
-                    return "— (lascia senza risposta)"
-                # A/B/C/D in "finto grassetto" per radio
-                return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
-
-            current = (row.get("chosen_option") or "").strip().upper()
-            if current not in letters:
+            # current selection
+            current = safe_str(row.get("chosen_option")).upper()
+            if current not in [x[0] for x in options]:
                 current = "—"
+
+            radio_options = ["—"] + [x[0] for x in options]
+
+            def fmt(letter: str) -> str:
+                if letter == "—":
+                    return "— (non risposto)"
+                for k, v in options:
+                    if k == letter:
+                        return f"{BOLD_LETTER.get(k, k)} {v}"
+                return letter
+
+            st.markdown(
+                f'<div class="quiz-card"><div class="quiz-title">Domanda n°{idx} di {len(rows)}</div>'
+                f'<div class="quiz-q"><b>{q_text}</b></div>',
+                unsafe_allow_html=True,
+            )
 
             choice = st.radio(
                 "Seleziona risposta",
@@ -595,105 +477,102 @@ with tab_stud:
                 index=radio_options.index(current),
                 format_func=fmt,
                 key=f"q_{row['id']}",
+                disabled=time_up,
             )
 
             # salva (— = None)
             new_val = None if choice == "—" else choice
             old_val = (row.get("chosen_option") or None)
 
-if new_val != old_val:
-    try:
-        update_chosen_option(
-            row_id=row["id"],
-            session_id=session_id,
-            chosen_letter=new_val
-        )
-    except Exception:
-        pass
+            if (not time_up) and (new_val != old_val):
+                try:
+                    update_chosen_option(
+                        row_id=row["id"],
+                        session_id=session_id,
+                        chosen_letter=new_val,
+                    )
+                except Exception:
+                    pass
 
-# Stato risposta selezionata (feedback professionale)
-if new_val is None:
-    st.caption("📝 **Stato risposta:** ⚠️ Non hai ancora risposto")
-else:
-    st.caption(f"📝 **Stato risposta:** ✅ Hai selezionato la risposta **{new_val}**")
+            # Stato risposta selezionata (feedback professionale)
+            if new_val is None:
+                st.markdown(
+                    '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
+                    unsafe_allow_html=True,
+                )
 
-st.divider()
+            st.divider()
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        # BOTTONE TERMINA ROSSO PROFESSIONALE (solo questo)
+        # Bottone termina (rosso)
         st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
         if st.button("Termina simulazione e vedi correzione"):
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = True
-            st.session_state["finished_ts"] = time.time()
             finish_session(session_id)
+            st.session_state["show_correction"] = True
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- RESULTS ----------
-    if st.session_state["show_results"]:
-        session_id = st.session_state["session_id"]
+    # Correzione finale
+    if session_id and st.session_state.get("show_correction"):
+        st.markdown("---")
+        st.header("✅ Correzione finale")
+
         rows = fetch_session_questions(session_id)
+        score, total = compute_score(rows)
 
-        score = 0
-        for row in rows:
-            chosen = (row.get("chosen_option") or "").strip().upper()
-            correct = (row.get("correct_option") or "").strip().upper()
-            if chosen and chosen == correct:
-                score += 1
+        st.markdown(
+            f"""
+<div class="result-card">
+  <div style="font-size:18px; font-weight:800;">Punteggio finale</div>
+  <div style="font-size:28px; font-weight:900; margin-top:6px;">{score} / {total}</div>
+  <div class="small-muted" style="margin-top:6px;">Risultato calcolato confrontando risposte selezionate e corrette.</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
 
-        start_ts = st.session_state.get("started_ts")
-        end_ts2 = st.session_state.get("finished_ts") or time.time()
-        elapsed_sec = int(max(0, float(end_ts2) - float(start_ts))) if start_ts else 0
-        em = elapsed_sec // 60
-        es = elapsed_sec % 60
+        for i, r in enumerate(rows, start=1):
+            q = safe_str(r.get("question_text"))
+            correct = safe_str(r.get("correct_option")).upper()
+            chosen = safe_str(r.get("chosen_option")).upper() or "—"
 
-        st.markdown("## ✅ Correzione finale")
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
-        st.divider()
+            # testo opzioni
+            opts = {
+                "A": safe_str(r.get("option_a")),
+                "B": safe_str(r.get("option_b")),
+                "C": safe_str(r.get("option_c")),
+                "D": safe_str(r.get("option_d")),
+            }
 
-        def letter_to_text(row: dict, letter: str) -> str:
-            letter = (letter or "").strip().upper()
-            if letter == "A":
-                return (row.get("option_a") or "").strip()
-            if letter == "B":
-                return (row.get("option_b") or "").strip()
-            if letter == "C":
-                return (row.get("option_c") or "").strip()
-            if letter == "D":
-                return (row.get("option_d") or "").strip()
-            return ""
+            def opt_text(letter):
+                t = safe_str(opts.get(letter))
+                return t if t else "(non presente)"
 
-        for idx, row in enumerate(rows, start=1):
-            chosen = (row.get("chosen_option") or "").strip().upper()
-            correct = (row.get("correct_option") or "").strip().upper()
+            ok = (chosen == correct)
 
-            chosen_text = letter_to_text(row, chosen) if chosen else ""
-            correct_text = letter_to_text(row, correct)
+            st.markdown(
+                f"""
+<div class="result-card">
+  <div style="font-weight:900; font-size:16px;">Domanda n°{i}</div>
+  <div style="margin-top:6px;"><b>{q}</b></div>
+  <div style="margin-top:10px;">
+    <div><b>Risposta selezionata:</b> <span class="{ 'correct' if ok else ('neutral' if chosen=='—' else 'wrong') }">{chosen}</span> — {opt_text(chosen) if chosen!='—' else '(non risposto)'}</div>
+    <div><b>Risposta corretta:</b> <span class="correct">{correct}</span> — {opt_text(correct)}</div>
+  </div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
 
-            ok = (chosen != "" and chosen == correct)
-
-            st.markdown(f"### Domanda n°{idx} {'✅' if ok else '❌'}")
-            st.markdown(f"**{row['question_text']}**")
-
-            if chosen:
-                st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
-            else:
-                st.write("**Tua risposta:** — (non risposta)")
-
-            st.write(f"**Corretta:** {correct}) {correct_text}")
-
-            if row.get("explanation"):
-                st.caption(row["explanation"])
-
-            st.divider()
-
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+        st.success("Sessione completata ✅")
 
         if st.button("Nuova simulazione"):
-            st.session_state["session_id"] = None
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = False
-            st.session_state["started_ts"] = None
-            st.session_state["finished_ts"] = None
-            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["active_session_id"] = None
+            st.session_state["sim_end_ts"] = None
+            st.session_state["show_correction"] = False
             st.rerun()
