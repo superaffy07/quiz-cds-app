@@ -613,16 +613,10 @@ with tab_stud:
         st.stop()
 
     # =========================================================
-# TAB 2 - BANCA DATI (PDF materiali di studio)
-# =========================================================
-with tabs[1]:
-    st.session_state["menu_page"] = "bank"
-
-    if (
-        not st.session_state.get("in_progress")
-        and not st.session_state.get("show_results")
-        and st.session_state.get("menu_page") == "bank"
-    ):
+    # =========================================================
+    # BANCA DATI (PDF materiali di studio) - NO TIMER
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
         st.markdown("## 📚 Banca dati")
         st.caption("Materiali di studio consultabili (PDF).")
 
@@ -649,19 +643,18 @@ with tabs[1]:
                 if st.button(d["title"], use_container_width=True):
                     st.session_state["bank_doc"] = d
                     st.rerun()
-
             st.stop()
 
         # Visualizzazione PDF
         d = st.session_state["bank_doc"]
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
+        colA, colB = st.columns([1, 1])
+        with colA:
             if st.button("⬅️ Torna agli argomenti", use_container_width=True):
                 st.session_state["bank_doc"] = None
                 st.rerun()
 
-        with col2:
+        with colB:
             st.link_button("Apri PDF in nuova scheda", d["url"], use_container_width=True)
 
         st.markdown(f"### {d['title']}")
@@ -669,19 +662,6 @@ with tabs[1]:
 
         st.stop()
 
-        # preview semplice (non cambia nulla del resto)
-        st.info("Anteprima: visualizzo le prime 20 domande (modalità base).")
-        all_q = fetch_all_bank_questions()
-        for i, q in enumerate(all_q[:20], start=1):
-            st.markdown(f"**{i}. {q.get('question_text','').strip()}**")
-            st.write(f"A) {q.get('option_a','')}")
-            st.write(f"B) {q.get('option_b','')}")
-            st.write(f"C) {q.get('option_c','')}")
-            if (q.get("option_d") or "").strip():
-                st.write(f"D) {q.get('option_d','')}")
-            st.divider()
-
-        st.stop()
 
     # =========================================================
     # CASO PRATICO (placeholder, NO timer)
