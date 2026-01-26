@@ -658,7 +658,32 @@ with tab_stud:
             st.link_button("Apri PDF in nuova scheda", d["url"], use_container_width=True)
 
         st.markdown(f"### {d['title']}")
-        components.iframe(d["url"], height=820, scrolling=True)
+        import requests
+        import base64
+
+resp = requests.get(d["url"], timeout=30)
+resp.raise_for_status()
+pdf_bytes = resp.content
+
+st.download_button(
+    "⬇️ Scarica PDF",
+    data=pdf_bytes,
+    file_name=d["title"].replace(" ", "_") + ".pdf",
+    mime="application/pdf",
+    use_container_width=True,
+)
+
+b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+pdf_html = f"""
+<iframe
+    src="data:application/pdf;base64,{b64}"
+    width="100%"
+    height="820"
+    style="border:none;"
+></iframe>
+"""
+st.markdown(pdf_html, unsafe_allow_html=True)
+
 
         st.stop()
 
