@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Dict
 
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 from supabase import create_client, Client
 
 # =========================================================
@@ -27,9 +27,7 @@ CUSTOM_CSS = """
 .block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
 
 /* background chiaro pulito */
-.stApp {
-  background: #f6f7fb;
-}
+.stApp { background: #f6f7fb; }
 
 /* card header */
 .hero {
@@ -85,7 +83,7 @@ CUSTOM_CSS = """
   border: 1px solid rgba(0,0,0,.08) !important;
 }
 
-/* buttons */
+/* buttons (base) */
 .stButton > button {
   border-radius: 12px;
   padding: 10px 14px;
@@ -100,10 +98,8 @@ CUSTOM_CSS = """
   background: #f9fafb;
 }
 
-/* radio / inputs */
-div[data-baseweb="input"] > div {
-  border-radius: 12px !important;
-}
+/* RADIO / INPUTS */
+div[data-baseweb="input"] > div { border-radius: 12px !important; }
 .stRadio label { color: #111827; }
 
 /* alert */
@@ -114,6 +110,50 @@ div[data-testid="stAlert"] {
 
 /* divider */
 hr { border-top: 1px solid rgba(0,0,0,.08); }
+
+/* =========================================
+   QUIZ CARD LOOK (solo estetica, logica invariata)
+   ========================================= */
+.quiz-card{
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.05);
+  padding: 14px 14px 10px 14px;
+  margin: 10px 0 12px 0;
+}
+.quiz-title{
+  font-weight: 850;
+  font-size: 16px;
+  color: #111827;
+  margin: 0 0 6px 0;
+}
+.quiz-question{
+  font-weight: 800;
+  font-size: 15px;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+.quiz-hint{
+  color: rgba(0,0,0,.55);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* =========================================
+   BOTTONE ROSSO SOLO PER "TERMINA"
+   (usiamo classi CSS attaccate al container)
+   ========================================= */
+.end-btn-wrap .stButton > button{
+  background: #b42318 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  box-shadow: 0 10px 22px rgba(180,35,24,.22) !important;
+}
+.end-btn-wrap .stButton > button:hover{
+  background: #9b1c14 !important;
+  transform: translateY(-1px);
+}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -125,10 +165,45 @@ N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
 
 # =========================================================
+# TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
+# =========================================================
+def render_live_timer(end_ts: float):
+    """
+    Mostra un countdown fluido aggiornato ogni 1s lato browser.
+    NON provoca rerun Streamlit -> niente schermo che scurisce.
+    """
+    end_ms = int(end_ts * 1000)
+    components.html(
+        f"""
+        <div style="margin: 0 0 10px 0;">
+          <div style="font-size: 20px; font-weight: 800; color:#111827;">
+            ⏱️ Tempo residuo: <span id="tval">--:--</span>
+          </div>
+        </div>
+        <script>
+          const end = {end_ms};
+
+          function pad(n) {{ return String(n).padStart(2,'0'); }}
+
+          function tick(){{
+            const now = Date.now();
+            let remaining = Math.max(0, Math.floor((end - now)/1000));
+            const m = Math.floor(remaining/60);
+            const s = remaining % 60;
+            document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
+          }}
+
+          tick();
+          setInterval(tick, 1000);
+        </script>
+        """,
+        height=40,
+    )
+
+# =========================================================
 # SUPABASE
 # =========================================================
 def get_secret(name: str, default: str = "") -> str:
-    # supporta sia Streamlit secrets che env var
     try:
         v = st.secrets.get(name, default)
         if v:
@@ -191,26 +266,18 @@ def fetch_all_bank_questions() -> List[Dict]:
     return sb.table("question_bank").select("*").order("id").execute().data or []
 
 def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
-    """
-    Snapshot delle domande in quiz_answers.
-    FIX: option_d MAI NULL → se manca, diventa "".
-    FIX: se option_d = "" allora:
-         - la D non va mostrata
-         - correct_option non può essere D
-    """
     rows = []
     for q in questions:
         qa = (q.get("question_text") or "").strip()
         oa = (q.get("option_a") or "").strip()
         ob = (q.get("option_b") or "").strip()
         oc = (q.get("option_c") or "").strip()
-        od = (q.get("option_d") or "").strip()  # può essere vuota
+        od = (q.get("option_d") or "").strip()
 
         co = (q.get("correct_option") or "").strip().upper()
         if co not in ["A", "B", "C", "D"]:
             co = "A"
 
-        # se non esiste D, non può essere corretta
         if od == "" and co == "D":
             if oc:
                 co = "C"
@@ -227,7 +294,7 @@ def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
                 "option_a": oa,
                 "option_b": ob,
                 "option_c": oc,
-                "option_d": od if od else "",  # <-- MAI NULL
+                "option_d": od if od else "",
                 "correct_option": co,
                 "chosen_option": None,
                 "explanation": (q.get("explanation") or "").strip(),
@@ -261,11 +328,10 @@ def ss_init():
         "session_id": None,
         "in_progress": False,
         "show_results": False,
-        "started_ts": None,        # time.time() locale
-        "finished_ts": None,       # time.time() locale
+        "started_ts": None,
+        "finished_ts": None,
         "duration_seconds": DURATION_SECONDS_DEFAULT,
         "n_questions": N_QUESTIONS_DEFAULT,
-        "auto_refresh": True,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -464,15 +530,16 @@ with tab_stud:
         elapsed = int(time.time() - float(st.session_state["started_ts"]))
         remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
 
-        mm = remaining // 60
-        ss = remaining % 60
+        # TIMER SUPER FLUIDO (NO RERUN)
+        end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
+        render_live_timer(end_ts)
 
-        st.markdown(f"## ⏱️ Tempo residuo: **{mm:02d}:{ss:02d}**")
         progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
         st.progress(min(max(progress, 0.0), 1.0))
         st.divider()
 
-        if remaining <= 0:
+        # controllo scadenza (server-side, senza refresh forzato)
+        if time.time() >= end_ts:
             st.warning("Tempo scaduto! Correzione automatica…")
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
@@ -482,21 +549,22 @@ with tab_stud:
 
         st.markdown("## 📝 Sessione in corso")
 
-        def letter_to_text(r: dict, letter: str) -> str:
-            letter = (letter or "").strip().upper()
-            if letter == "A":
-                return (r.get("option_a") or "").strip()
-            if letter == "B":
-                return (r.get("option_b") or "").strip()
-            if letter == "C":
-                return (r.get("option_c") or "").strip()
-            if letter == "D":
-                return (r.get("option_d") or "").strip()
-            return ""
+        # Lettere "bold" compatibili con radio (no markdown)
+        BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
 
         for idx, row in enumerate(rows, start=1):
-            st.markdown(f"### Q{idx}")
-            st.write(row["question_text"])
+            # --- card più professionale, senza cambiare la logica ---
+            st.markdown(
+                f"""
+                <div class="quiz-card">
+                  <div class="quiz-title">Domanda n°{idx}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # DOMANDA IN GRASSETTO
+            st.markdown(f"**{row['question_text']}**")
 
             options_map = {
                 "A": (row.get("option_a") or "").strip(),
@@ -514,7 +582,8 @@ with tab_stud:
             def fmt(opt: str) -> str:
                 if opt == "—":
                     return "— (lascia senza risposta)"
-                return f"{opt}) {options_map[opt]}"
+                # A/B/C/D in "finto grassetto" per radio
+                return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
 
             current = (row.get("chosen_option") or "").strip().upper()
             if current not in letters:
@@ -540,90 +609,81 @@ with tab_stud:
 
             st.divider()
 
+        # BOTTONE TERMINA ROSSO PROFESSIONALE (solo questo)
+        st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
         if st.button("Termina simulazione e vedi correzione"):
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
             st.session_state["finished_ts"] = time.time()
             finish_session(session_id)
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # TIMER LIVE: aggiorna ogni secondo senza perdere login (session_state resta)
-# TIMER FLUIDO: refresh automatico ogni 1s (client-side)
-st_autorefresh(interval=1000, key="timer_tick")
+    # ---------- RESULTS ----------
+    if st.session_state["show_results"]:
+        session_id = st.session_state["session_id"]
+        rows = fetch_session_questions(session_id)
 
+        score = 0
+        for row in rows:
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+            if chosen and chosen == correct:
+                score += 1
 
-# ---------- RESULTS ----------
-if st.session_state["show_results"]:
-    session_id = st.session_state["session_id"]
-    rows = fetch_session_questions(session_id)
+        start_ts = st.session_state.get("started_ts")
+        end_ts2 = st.session_state.get("finished_ts") or time.time()
+        elapsed_sec = int(max(0, float(end_ts2) - float(start_ts))) if start_ts else 0
+        em = elapsed_sec // 60
+        es = elapsed_sec % 60
 
-    # calcolo punteggio
-    score = 0
-    for row in rows:
-        chosen = (row.get("chosen_option") or "").strip().upper()
-        correct = (row.get("correct_option") or "").strip().upper()
-        if chosen and chosen == correct:
-            score += 1
-
-    # tempo impiegato
-    start_ts = st.session_state.get("started_ts")
-    end_ts = st.session_state.get("finished_ts") or time.time()
-    elapsed_sec = int(max(0, float(end_ts) - float(start_ts))) if start_ts else 0
-    em = elapsed_sec // 60
-    es = elapsed_sec % 60
-
-    st.markdown("## ✅ Correzione finale")
-
-    # RISULTATO SOPRA + TEMPO
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
-
-    st.divider()
-
-    def letter_to_text(row: dict, letter: str) -> str:
-        letter = (letter or "").strip().upper()
-        if letter == "A":
-            return (row.get("option_a") or "").strip()
-        if letter == "B":
-            return (row.get("option_b") or "").strip()
-        if letter == "C":
-            return (row.get("option_c") or "").strip()
-        if letter == "D":
-            return (row.get("option_d") or "").strip()
-        return ""
-
-    for idx, row in enumerate(rows, start=1):
-        chosen = (row.get("chosen_option") or "").strip().upper()
-        correct = (row.get("correct_option") or "").strip().upper()
-
-        chosen_text = letter_to_text(row, chosen) if chosen else ""
-        correct_text = letter_to_text(row, correct)
-
-        ok = (chosen != "" and chosen == correct)
-
-        st.markdown(f"### Q{idx} {'✅' if ok else '❌'}")
-        st.write(row["question_text"])
-
-        # MOSTRA LETTERA + TESTO (così capisci subito)
-        if chosen:
-            st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
-        else:
-            st.write("**Tua risposta:** — (non risposta)")
-
-        st.write(f"**Corretta:** {correct}) {correct_text}")
-
-        if row.get("explanation"):
-            st.caption(row["explanation"])
-
+        st.markdown("## ✅ Correzione finale")
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
         st.divider()
 
-    # RISULTATO SOTTO
-    st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+        def letter_to_text(row: dict, letter: str) -> str:
+            letter = (letter or "").strip().upper()
+            if letter == "A":
+                return (row.get("option_a") or "").strip()
+            if letter == "B":
+                return (row.get("option_b") or "").strip()
+            if letter == "C":
+                return (row.get("option_c") or "").strip()
+            if letter == "D":
+                return (row.get("option_d") or "").strip()
+            return ""
 
-    if st.button("Nuova simulazione"):
-        st.session_state["session_id"] = None
-        st.session_state["in_progress"] = False
-        st.session_state["show_results"] = False
-        st.session_state["started_ts"] = None
-        st.session_state["finished_ts"] = None
-        st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
-        st.rerun()
+        for idx, row in enumerate(rows, start=1):
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+
+            chosen_text = letter_to_text(row, chosen) if chosen else ""
+            correct_text = letter_to_text(row, correct)
+
+            ok = (chosen != "" and chosen == correct)
+
+            st.markdown(f"### Domanda n°{idx} {'✅' if ok else '❌'}")
+            st.markdown(f"**{row['question_text']}**")
+
+            if chosen:
+                st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
+            else:
+                st.write("**Tua risposta:** — (non risposta)")
+
+            st.write(f"**Corretta:** {correct}) {correct_text}")
+
+            if row.get("explanation"):
+                st.caption(row["explanation"])
+
+            st.divider()
+
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+
+        if st.button("Nuova simulazione"):
+            st.session_state["session_id"] = None
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = False
+            st.session_state["started_ts"] = None
+            st.session_state["finished_ts"] = None
+            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.rerun()
