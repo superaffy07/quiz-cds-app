@@ -636,48 +636,12 @@ with tab_stud:
             },
         ]
 
-        # Lista argomenti
-        if st.session_state["bank_doc"] is None:
-            st.markdown("### Seleziona un argomento")
-            for d in docs:
-                for d in docs:
-    st.markdown(
-        f"""
-        <a href="{d['url']}" target="_blank" style="text-decoration:none;">
-            <div style="
-                padding:14px 16px;
-                border:1px solid rgba(0,0,0,.12);
-                border-radius:12px;
-                margin-bottom:10px;
-                background: rgba(255,255,255,.03);
-                font-weight:600;
-            ">
-                {d['title']}
-            </div>
-        </a>
-        """,
-        unsafe_allow_html=True,
-    )
+                # Lista argomenti (clic diretto -> apre PDF in nuova scheda)
+        st.markdown("### Seleziona un argomento (si apre in una nuova scheda)")
+        for d in docs:
+            st.link_button(f"📄 {d['title']}", d["url"], use_container_width=True)
 
-            st.stop()
-
-        # Visualizzazione PDF
-        d = st.session_state["bank_doc"]
-
-        colA, colB = st.columns([1, 1])
-        with colA:
-            if st.button("⬅️ Torna agli argomenti", use_container_width=True):
-                st.session_state["bank_doc"] = None
-                st.rerun()
-
-        with colB:
-            st.link_button("Apri PDF in nuova scheda", d["url"], use_container_width=True)
-
-        st.markdown(f"### {d['title']}")
-        components.iframe(d["url"], height=820, scrolling=True)
-
-
-    st.stop()
+        st.stop()
 
 
     # =========================================================
