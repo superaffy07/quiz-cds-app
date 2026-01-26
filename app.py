@@ -420,94 +420,6 @@ def render_header(total_questions: int):
 # =========================================================
 bank_count = fetch_bank_count()
 render_header(bank_count)
-# ===============================
-# HERO / LANDING PAGE
-# ===============================
-components.html(
-    """
-    <style>
-        .hero-wrapper {
-            background: linear-gradient(135deg, #0b2c4d, #0f4c81);
-            padding: 48px 40px;
-            border-radius: 18px;
-            color: white;
-            margin-bottom: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.15);
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 18px;
-        }
-        .hero-title {
-            font-size: 42px;
-            font-weight: 800;
-            line-height: 1.15;
-            margin-bottom: 14px;
-        }
-        .hero-sub {
-            font-size: 17px;
-            opacity: 0.92;
-            max-width: 900px;
-            margin-bottom: 34px;
-        }
-        .hero-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-        }
-        .hero-card {
-            background: rgba(255,255,255,0.12);
-            border-radius: 14px;
-            padding: 18px;
-            font-size: 15px;
-            line-height: 1.4;
-            backdrop-filter: blur(6px);
-        }
-        .hero-card h4 {
-            margin: 0 0 6px 0;
-            font-size: 16px;
-            font-weight: 700;
-        }
-    </style>
-
-    <div class="hero-wrapper">
-        <div class="hero-badge">🚓 Platform Corso PL</div>
-
-        <div class="hero-title">
-            Banca dati, simulazioni e quiz<br>
-            <span style="opacity:0.9;">Polizia Locale</span>
-        </div>
-
-        <div class="hero-sub">
-            Piattaforma didattica professionale per la preparazione ai concorsi
-            di Polizia Locale: simulazioni d’esame, banca dati normativa
-            e casi pratici commentati.
-        </div>
-
-        <div class="hero-cards">
-            <div class="hero-card">
-                <h4>📚 Banca dati</h4>
-                Normativa aggiornata e consultabile per lo studio.
-            </div>
-            <div class="hero-card">
-                <h4>📝 Simulazioni quiz</h4>
-                Prove d’esame realistiche con timer e correzione.
-            </div>
-            <div class="hero-card">
-                <h4>⚖️ Casi pratici</h4>
-                Applicazione concreta delle norme operative.
-            </div>
-        </div>
-    </div>
-    """,
-    height=420,
-)
 
 tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
@@ -584,6 +496,222 @@ with tab_doc:
 # CORSISTA
 # =========================================================
 with tab_stud:
+    # =========================================================
+    # LANDING / LOGIN WOW (SOLO PRIMA DEL LOGIN)
+    # =========================================================
+    LANDING_CSS = """
+    <style>
+      /* Rende la sezione landing più "cinematografica" */
+      .pl-landing {
+        position: relative;
+        border-radius: 22px;
+        overflow: hidden;
+        padding: 42px 34px;
+        margin: 10px 0 18px 0;
+        box-shadow: 0 18px 45px rgba(0,0,0,.22);
+        border: 1px solid rgba(255,255,255,.10);
+        color: #fff;
+        background:
+          radial-gradient(1200px 480px at 20% 10%, rgba(60,130,255,.35), transparent 60%),
+          radial-gradient(900px 420px at 90% 20%, rgba(255,60,90,.28), transparent 55%),
+          radial-gradient(900px 560px at 50% 90%, rgba(10,20,40,.95), rgba(10,20,40,.92)),
+          linear-gradient(135deg, #071a2f, #0b2b4c);
+      }
+
+      /* “barra lampeggiante” in alto */
+      .pl-landing::before{
+        content:"";
+        position:absolute;
+        left:-5%;
+        right:-5%;
+        top:18px;
+        height:2px;
+        background: linear-gradient(90deg, rgba(50,140,255,0), rgba(50,140,255,.9), rgba(255,70,100,.9), rgba(255,70,100,0));
+        filter: drop-shadow(0 0 8px rgba(50,140,255,.55));
+        opacity:.9;
+      }
+
+      .pl-pill {
+        display:inline-flex;
+        align-items:center;
+        gap:10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.10);
+        border: 1px solid rgba(255,255,255,.16);
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: .4px;
+      }
+
+      .pl-title {
+        margin: 14px 0 6px 0;
+        font-size: 44px;
+        line-height: 1.08;
+        font-weight: 900;
+        letter-spacing: .2px;
+      }
+
+      .pl-sub {
+        margin: 8px 0 0 0;
+        font-size: 15px;
+        opacity: .92;
+        max-width: 950px;
+      }
+
+      .pl-chiprow{
+        margin-top: 12px;
+        display:flex;
+        gap:10px;
+        flex-wrap: wrap;
+        opacity:.95;
+      }
+      .pl-chip{
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(0,0,0,.18);
+        border: 1px solid rgba(255,255,255,.12);
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      /* layout: testo sopra, card login sotto */
+      .pl-login-wrap{
+        margin-top: 18px;
+        display:flex;
+        justify-content:center;
+      }
+
+      .pl-login-card{
+        width: min(720px, 96%);
+        background: rgba(255,255,255,.10);
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 20px;
+        padding: 18px 18px 14px 18px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 16px 35px rgba(0,0,0,.20);
+      }
+
+      .pl-login-title{
+        text-align:center;
+        font-size: 22px;
+        font-weight: 900;
+        margin: 2px 0 12px 0;
+      }
+
+      /* Styling input Streamlit */
+      .pl-login-card div[data-baseweb="input"] > div{
+        background: rgba(255,255,255,.92) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(0,0,0,.10) !important;
+      }
+      .pl-login-card input{
+        color: #0b1220 !important;
+        font-weight: 700 !important;
+      }
+
+      /* Bottone "Entra" stile oro */
+      .pl-login-card .stButton > button{
+        width: 100%;
+        background: linear-gradient(180deg, #f2c36b, #d59a3a) !important;
+        color: #1b1206 !important;
+        border: 1px solid rgba(0,0,0,.18) !important;
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
+        font-weight: 900 !important;
+        box-shadow: 0 14px 28px rgba(213,154,58,.22) !important;
+      }
+      .pl-login-card .stButton > button:hover{
+        transform: translateY(-1px);
+        filter: brightness(1.02);
+      }
+
+      .pl-login-foot{
+        text-align:center;
+        opacity:.9;
+        font-size: 12px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 820px){
+        .pl-title{ font-size: 34px; }
+        .pl-landing{ padding: 34px 20px; }
+      }
+    </style>
+    """
+
+    st.markdown(LANDING_CSS, unsafe_allow_html=True)
+
+    # ---------- LOGIN ----------
+    if not st.session_state["logged"]:
+        st.markdown(
+            """
+            <div class="pl-landing">
+              <div class="pl-pill">🚓 Platform Corso PL</div>
+
+              <div class="pl-title">
+                Banca dati, simulazioni e quiz<br>
+                <span style="opacity:.9;">Polizia Locale</span>
+              </div>
+
+              <div class="pl-sub">
+                Piattaforma didattica a cura di <b>Raffaele Sotero</b> • Correzione finale dettagliata.<br>
+                Simulazioni d’esame, banca dati normativa e casi pratici commentati.
+              </div>
+
+              <div class="pl-chiprow">
+                <div class="pl-chip">Casi pratici</div>
+                <div class="pl-chip">Quiz</div>
+                <div class="pl-chip">Banca dati</div>
+              </div>
+
+              <div class="pl-login-wrap">
+                <div class="pl-login-card">
+                  <div class="pl-login-title">Accesso corsista</div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Card “reale” (widget Streamlit) – la CSS sopra la rende uguale al mockup
+        with st.container():
+            # Questo container finisce dentro la card perché Streamlit lo renderizza subito sotto:
+            # (visivamente risulta come nell’immagine)
+            full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
+            course_pass = st.text_input(
+                "Password del corso",
+                type="password",
+                help="Inserisci la password fornita per accedere.",
+            )
+
+            if st.button("Entra"):
+                if not full_name or not course_pass:
+                    st.error("Inserisci Nome e Cognome + Password.")
+                elif course_pass != COURSE_PASSWORD:
+                    st.error("Password errata. Riprova.")
+                else:
+                    try:
+                        st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
+                        st.session_state["logged"] = True
+                        st.session_state["menu_page"] = "home"
+                        st.success("Accesso OK ✅")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Errore accesso.")
+                        st.exception(e)
+
+            st.markdown(
+                '<div class="pl-login-foot">Accesso riservato ai corsisti • Inserisci Nome e Cognome e la password del corso.</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.stop()
+
+    # Se sei loggato, da qui in poi resta TUTTO come già hai (non tocchiamo nulla)
+    st.subheader("Accesso corsista")
+
     st.subheader("Accesso corsista")
 
     # ---------- LOGIN ----------
