@@ -130,6 +130,51 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
 }
 
 /* =========================================
+   MENU CARDS (NUOVO)
+   ========================================= */
+.menu-grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+@media (max-width: 980px){
+  .menu-grid{ grid-template-columns: 1fr; }
+}
+.menu-card{
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.05);
+  padding: 14px 14px;
+}
+.menu-title{
+  font-size: 16px;
+  font-weight: 850;
+  color: #111827;
+  margin: 0 0 6px 0;
+}
+.menu-desc{
+  color: #4b5563;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+  line-height: 1.35;
+}
+.menu-chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.08);
+  background:#fbfbfd;
+  color:#111827;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* =========================================
    BOTTONE ROSSO SOLO PER "TERMINA"
    ========================================= */
 .end-btn-wrap .stButton > button{
@@ -168,10 +213,10 @@ N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
 
 # =========================================================
-# ACCESSO CORSO (aggiunta richiesta)
+# ACCESSO CORSO
 # =========================================================
-COURSE_PASSWORD = "polizia2026"             # <-- password richiesta per entrare
-COURSE_CLASS_CODE = "CORSO_PL_2026"         # <-- class_code fisso per compatibilità DB
+COURSE_PASSWORD = "polizia2026"
+COURSE_CLASS_CODE = "CORSO_PL_2026"
 
 # =========================================================
 # TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
@@ -191,9 +236,7 @@ def render_live_timer(end_ts: float):
         </div>
         <script>
           const end = {end_ms};
-
           function pad(n) {{ return String(n).padStart(2,'0'); }}
-
           function tick(){{
             const now = Date.now();
             let remaining = Math.max(0, Math.floor((end - now)/1000));
@@ -201,7 +244,6 @@ def render_live_timer(end_ts: float):
             const s = remaining % 60;
             document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
           }}
-
           tick();
           setInterval(tick, 1000);
         </script>
@@ -341,6 +383,8 @@ def ss_init():
         "finished_ts": None,
         "duration_seconds": DURATION_SECONDS_DEFAULT,
         "n_questions": N_QUESTIONS_DEFAULT,
+        # NUOVO: pagina menu dopo login
+        "menu_page": "home",   # home | sim | bank | case
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -358,7 +402,7 @@ def render_header(total_questions: int):
   <div class="hero-title">🚓 Banca dati, simulazioni e quiz — Polizia Locale</div>
   <div class="hero-sub">
     Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
-    Casi pratici • Quiz • Banca dati • {N_QUESTIONS_DEFAULT} domande • Timer {DURATION_SECONDS_DEFAULT//60} minuti • Correzione finale dettagliata
+    Casi pratici • Quiz • Banca dati • Correzione finale dettagliata
   </div>
   <div class="badges">
     <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
@@ -465,9 +509,9 @@ with tab_stud:
                 st.error("Password errata. Riprova.")
             else:
                 try:
-                    # Salvo nel DB: nickname = Nome e Cognome, class_code fisso
                     st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
                     st.session_state["logged"] = True
+                    st.session_state["menu_page"] = "home"
                     st.success("Accesso OK ✅")
                     st.rerun()
                 except Exception as e:
@@ -476,12 +520,17 @@ with tab_stud:
 
         st.stop()
 
+    # ---------- PROFILO ----------
     student = st.session_state["student"]
-
     st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
 
-    col1, col2 = st.columns([1, 4])
+    col1, col2, col3 = st.columns([1, 1, 5])
     with col1:
+        if st.button("🏠 Menu"):
+            st.session_state["menu_page"] = "home"
+            st.rerun()
+
+    with col2:
         if st.button("Logout"):
             st.session_state["logged"] = False
             st.session_state["student"] = None
@@ -491,21 +540,137 @@ with tab_stud:
             st.session_state["started_ts"] = None
             st.session_state["finished_ts"] = None
             st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["menu_page"] = "home"
             st.rerun()
 
     bank_count = fetch_bank_count()
     st.write(f"📚 Domande in banca dati: **{bank_count}**")
-
-    if bank_count < N_QUESTIONS_DEFAULT:
-        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande. Ora: {bank_count}")
-        st.stop()
-
     st.divider()
 
-    # ---------- START ----------
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]):
+    # =========================================================
+    # MENU DOPO LOGIN (NUOVO)
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "home":
+        st.markdown("## Seleziona modalità")
+        st.caption("Scegli cosa vuoi fare oggi. La simulazione ha il timer; banca dati e caso pratico per ora sono in modalità base.")
+
+        # layout a 3 card
+        st.markdown('<div class="menu-grid">', unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">⏱️ Timer attivo</div>
+              <div class="menu-title">Simulazione Quiz (30 minuti)</div>
+              <div class="menu-desc">
+                30 domande estratte casualmente dalla banca dati. Alla fine vedi punteggio e correzione dettagliata.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("➡️ Vai alla Simulazione"):
+                st.session_state["menu_page"] = "sim"
+                st.rerun()
+
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">📚 Studio libero</div>
+              <div class="menu-title">Banca dati</div>
+              <div class="menu-desc">
+                Modalità studio: sfoglia le domande e allenati senza timer. (In arrivo: filtri per argomento)
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with c2:
+            if st.button("➡️ Vai alla Banca dati"):
+                st.session_state["menu_page"] = "bank"
+                st.rerun()
+
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">🧠 Allenamento</div>
+              <div class="menu-title">Caso pratico</div>
+              <div class="menu-desc">
+                Rispondi a uno scenario operativo. (In arrivo: correzione guidata e griglia di valutazione)
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with c3:
+            if st.button("➡️ Vai al Caso pratico"):
+                st.session_state["menu_page"] = "case"
+                st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.stop()
+
+    # =========================================================
+    # BANCA DATI (placeholder, NO timer)
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
+        st.markdown("## 📚 Banca dati")
+        st.caption("Qui faremo la modalità studio senza timer. Per ora è una schermata base, poi aggiungiamo filtri per argomenti e ricerca.")
+
+        if bank_count <= 0:
+            st.warning("La banca dati è vuota: carica un CSV dal tab Docente.")
+            st.stop()
+
+        # preview semplice (non cambia nulla del resto)
+        st.info("Anteprima: visualizzo le prime 20 domande (modalità base).")
+        all_q = fetch_all_bank_questions()
+        for i, q in enumerate(all_q[:20], start=1):
+            st.markdown(f"**{i}. {q.get('question_text','').strip()}**")
+            st.write(f"A) {q.get('option_a','')}")
+            st.write(f"B) {q.get('option_b','')}")
+            st.write(f"C) {q.get('option_c','')}")
+            if (q.get("option_d") or "").strip():
+                st.write(f"D) {q.get('option_d','')}")
+            st.divider()
+
+        st.stop()
+
+    # =========================================================
+    # CASO PRATICO (placeholder, NO timer)
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "case":
+        st.markdown("## 🧠 Caso pratico")
+        st.caption("Qui inseriremo casi pratici per argomento. Per ora è una versione base senza correzione automatica.")
+
+        st.markdown("### Scenario (demo)")
+        st.write(
+            "Durante un controllo, un conducente circola con documento di guida non esibito al momento del controllo e sostiene di averlo dimenticato a casa."
+        )
+        ans = st.text_area("Scrivi la tua risposta (sintetica ma completa):", height=140)
+
+        colA, colB = st.columns([1, 3])
+        with colA:
+            if st.button("Salva risposta (demo)"):
+                st.success("Risposta salvata (demo). In arrivo: correzione automatica e griglia di valutazione.")
+
+        with colB:
+            st.info("Prossimo step: casi pratici reali + criteri di idoneità + feedback automatico.")
+
+        st.stop()
+
+    # =========================================================
+    # SIMULAZIONE (timer SOLO QUI)
+    # =========================================================
+    if bank_count < N_QUESTIONS_DEFAULT:
+        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande per la simulazione. Ora: {bank_count}")
+        st.stop()
+
+    # ---------- START SIM (solo se menu_page == sim) ----------
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "sim":
         st.markdown("### Simulazione (30 domande – 30 minuti)")
-        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer scorre in tempo reale.")
+        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer parte SOLO in questa modalità.")
 
         if st.button("Inizia simulazione"):
             try:
@@ -519,7 +684,6 @@ with tab_stud:
 
                 all_q = fetch_all_bank_questions()
                 picked = random.sample(all_q, N_QUESTIONS_DEFAULT)
-
                 insert_session_questions(sess["id"], picked)
 
                 st.success("Simulazione avviata ✅")
@@ -702,18 +866,140 @@ with tab_stud:
 
         st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
 
-        if st.button("Nuova simulazione"):
+        if st.button("Torna al menu"):
             st.session_state["session_id"] = None
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = False
             st.session_state["started_ts"] = None
             st.session_state["finished_ts"] = None
             st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["menu_page"] = "home"
             st.rerun()
 
 # =========================================================
-# (padding lines - non rimuovere nulla)
+# PADDING (non rimuovere nulla)
 # =========================================================
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
 # padding
 # padding
 # padding
