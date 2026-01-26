@@ -273,41 +273,6 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     st.stop()
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-# =========================================================
-# WOW LANDING (SCHERMATA INIZIALE)
-# =========================================================
-def show_landing_wow():
-    components.html(
-        """
-        <style>
-        .wow {
-            min-height: 100vh;
-            background: linear-gradient(rgba(0,0,0,.7), rgba(0,0,0,.7)),
-                        url("https://images.unsplash.com/photo-1605902711622-cfb43c44367f?auto=format&fit=crop&w=1600&q=80");
-            background-size: cover;
-            background-position: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            text-align: center;
-        }
-        .wow-box {
-            background: rgba(0,0,0,.6);
-            padding: 60px 80px;
-            border-radius: 24px;
-        }
-        </style>
-        <div class="wow">
-            <div class="wow-box">
-                <h1>PLATFORM CORSO PL 2026</h1>
-                <p>Accesso riservato ai corsisti</p>
-            </div>
-        </div>
-        """,
-        height=700
-    )
-
 
 # =========================================================
 # DB HELPERS
@@ -453,13 +418,8 @@ def render_header(total_questions: int):
 # =========================================================
 # APP
 # =========================================================
-if not st.session_state["logged"]:
-    show_landing_wow()
-    st.stop()
-
 bank_count = fetch_bank_count()
 render_header(bank_count)
-
 # ===============================
 # HERO / LANDING PAGE
 # ===============================
