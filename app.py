@@ -618,7 +618,7 @@ else:
     st.caption(f"📝 **Stato risposta:** ✅ Hai selezionato la risposta **{new_val}**")
 
 
-            st.divider()
+st.divider()
 
         # BOTTONE TERMINA ROSSO PROFESSIONALE (solo questo)
         st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
