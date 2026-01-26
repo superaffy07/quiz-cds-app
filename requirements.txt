@@ -3,3 +3,4 @@ supabase
 pandas
 PyMuPDF
 streamlit-autorefresh
+streamlit-autorefresh==1.0.1
