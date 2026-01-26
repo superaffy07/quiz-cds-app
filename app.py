@@ -182,6 +182,13 @@ with tab_doc:
             df["explanation"] = ""
 
         df = df.fillna("")
+        # valida: se option_d è vuota, correct_option non può essere D
+bad_d = (df["option_d"].astype(str).str.strip() == "") & (df["correct_option"] == "D")
+if bad_d.any():
+    st.error("Trovate righe con correct_option = D ma option_d vuota. Correggi il CSV.")
+    st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
+    st.stop()
+
         df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
 
         # valida correct_option
@@ -311,34 +318,35 @@ with tab_stud:
             st.markdown(f"### Q{idx}")
             st.write(row["question_text"])
 
-            options_map = {
-                "A": row["option_a"],
-                "B": row["option_b"],
-                "C": row["option_c"],
-                "D": row["option_d"],
-            }
+           options_map = {
+    "A": (row.get("option_a") or "").strip(),
+    "B": (row.get("option_b") or "").strip(),
+    "C": (row.get("option_c") or "").strip(),
+    "D": (row.get("option_d") or "").strip(),
+}
 
-            # radio: opzioni = lettere A/B/C/D, così non sbaglia mai
-            def fmt(letter: str) -> str:
-                return f"{letter}) {options_map[letter]}"
+# tieni solo le opzioni che hanno testo
+letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
 
-            current = st.session_state["answers"].get(row["id"])  # lettera
-            chosen = st.radio(
-                "Seleziona risposta",
-                options=["A", "B", "C", "D"],
-                format_func=fmt,
-                index=(["A", "B", "C", "D"].index(current) if current in ["A", "B", "C", "D"] else 0),
-                key=f"row_{row['id']}",
-                horizontal=False,
-            )
+def fmt(letter: str) -> str:
+    return f"{letter}) {options_map[letter]}"
 
-            # salva in memoria + DB subito (così se refreshi non perdi)
-            st.session_state["answers"][row["id"]] = chosen
-            try:
-                update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=chosen)
-            except Exception:
-                pass
+current = st.session_state["answers"].get(row["id"])
 
+chosen = st.radio(
+    "Seleziona risposta",
+    options=letters,                 # <-- qui NON è fisso A/B/C/D
+    format_func=fmt,
+    index=(letters.index(current) if current in letters else 0),
+    key=f"row_{row['id']}",
+    horizontal=False,
+)
+
+st.session_state["answers"][row["id"]] = chosen
+try:
+    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=chosen)
+except Exception:
+    pass
             st.divider()
 
         # termina manualmente
