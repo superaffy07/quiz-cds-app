@@ -7,42 +7,6 @@ from typing import List, Dict
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
-# =========================
-# LANDING PAGE – STILE POLIZIA LOCALE
-# =========================
-st.markdown(
-    """
-    <div class="hero-title">
-        Banca dati, simulazioni e quiz<br>
-        <span>Polizia Locale</span>
-    </div>
-
-    <div class="hero-sub">
-        Piattaforma didattica professionale per la preparazione ai concorsi
-        di Polizia Locale: simulazioni d’esame, banca dati normativa
-        e casi pratici commentati.
-    </div>
-
-    <div class="hero-cards">
-        <div class="hero-card">
-            <h4>📘 Banca dati</h4>
-            <p>Normativa aggiornata e consultabile per lo studio.</p>
-        </div>
-
-        <div class="hero-card">
-            <h4>📝 Simulazioni quiz</h4>
-            <p>Prove d’esame realistiche con timer e correzione.</p>
-        </div>
-
-        <div class="hero-card">
-            <h4>⚖️ Casi pratici</h4>
-            <p>Applicazione concreta delle norme operative.</p>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 
 
 # =========================================================
