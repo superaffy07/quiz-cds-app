@@ -76,25 +76,31 @@ def fetch_all_bank_questions() -> list[dict]:
 
 
 def insert_session_questions(session_id: str, questions: list[dict]) -> None:
-    # Salviamo le domande estratte nella tabella quiz_answers (così restano “fotografate” per quella sessione)
+    # Salviamo le domande estratte nella tabella quiz_answers
     rows = []
+
     for q in questions:
-        rows.append(
-            {
-                "session_id": session_id,
-                "topic_id": None,
-                "question_text": q["question_text"],
-                "option_a": q["option_a"],
-                "option_b": q["option_b"],
-                "option_c": q["option_c"],
-                "option_d": q["option_d"],
-                "correct_option": q["correct_option"],  # A/B/C/D
-                "chosen_option": None,
-                "explanation": q.get("explanation", ""),
-            }
-        )
+        option_a = (q.get("option_a") or "").strip()
+        option_b = (q.get("option_b") or "").strip()
+        option_c = (q.get("option_c") or "").strip()
+        option_d = (q.get("option_d") or "").strip()  # 👈 FIX CRITICO
+
+        rows.append({
+            "session_id": session_id,
+            "topic_id": None,
+            "question_text": q.get("question_text", "").strip(),
+            "option_a": option_a,
+            "option_b": option_b,
+            "option_c": option_c,
+            "option_d": option_d,          # MAI NULL
+            "correct_option": q.get("correct_option"),
+            "chosen_option": None,
+            "explanation": q.get("explanation", "")
+        })
+
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
+
 
 
 def fetch_session_questions(session_id: str) -> list[dict]:
