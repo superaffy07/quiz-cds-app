@@ -1134,4 +1134,3 @@ with tab_stud:
             st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
             st.session_state["menu_page"] = "home"
             st.rerun()
-```
