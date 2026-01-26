@@ -161,6 +161,150 @@ ss_init()
 # =========================
 # UI
 # =========================
+import streamlit as st
+
+# ---------- UI / BRANDING ----------
+st.set_page_config(
+    page_title="Corso Polizia Locale — Quiz",
+    page_icon="🚓",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+CUSTOM_CSS = """
+<style>
+/* Background generale */
+.stApp {
+  background: radial-gradient(1200px 700px at 10% 0%, #0b1220 0%, #0b1220 35%, #0a0f1a 100%);
+  color: #e8eefc;
+}
+
+/* Contenitore principale più “card” */
+.block-container {
+  padding-top: 1.2rem;
+  padding-bottom: 3rem;
+  max-width: 1100px;
+}
+
+/* Header “hero” */
+.hero {
+  border: 1px solid rgba(255,255,255,.08);
+  background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  box-shadow: 0 12px 35px rgba(0,0,0,.35);
+  border-radius: 18px;
+  padding: 22px 22px;
+  margin-bottom: 18px;
+}
+.hero-top {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.hero-title {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  margin: 0;
+}
+.hero-sub {
+  margin: 6px 0 0 0;
+  opacity: .85;
+  font-size: 15px;
+}
+.badges {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.badge {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.badge strong { font-weight: 700; }
+
+/* Tab più pulite */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: rgba(232,238,252,.85);
+}
+.stTabs [aria-selected="true"] {
+  background: rgba(79, 156, 255, .18) !important;
+  border: 1px solid rgba(79, 156, 255, .35) !important;
+  color: #e8eefc !important;
+}
+
+/* Bottoni più moderni */
+.stButton > button {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.08);
+  color: #e8eefc;
+  transition: all .15s ease-in-out;
+}
+.stButton > button:hover {
+  transform: translateY(-1px);
+  background: rgba(79,156,255,.18);
+  border: 1px solid rgba(79,156,255,.35);
+}
+
+/* Alert box più carine */
+div[data-testid="stAlert"] {
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+}
+
+/* Linee/divider */
+hr {
+  border-top: 1px solid rgba(255,255,255,.12);
+}
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+def render_header(total_questions: int | None = None):
+    tq = f"{total_questions}" if isinstance(total_questions, int) else "—"
+    st.markdown(
+        f"""
+        <div class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="hero-title">🚓 Corso Polizia Locale — Allenamento Quiz</div>
+              <div class="hero-sub">
+                Simulazioni da 30 domande • Timer 30 minuti • Correzione finale con riepilogo completo
+              </div>
+              <div class="hero-sub" style="margin-top:6px;">
+                Creato da <strong>Raffaele Sotero</strong> • Versione Web
+              </div>
+            </div>
+            <div class="badges">
+              <span class="badge">📚 <strong>Banca dati</strong>: {tq}</span>
+              <span class="badge">⏱️ <strong>Timer</strong>: 30 min</span>
+              <span class="badge">✅ <strong>Correzione</strong>: fine prova</span>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 st.title("🚓 Allenamento Quiz CDS")
 st.caption("Simulazione: 30 domande random dalla banca dati. Timer 30 minuti. Correzione finale.")
 
