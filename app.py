@@ -418,15 +418,214 @@ def render_header(total_questions: int):
 # =========================================================
 # APP
 # =========================================================
+
 bank_count = fetch_bank_count()
+
+# ---------------------------------------------------------
+# LANDING WOW (MOSTRA SOLO SE NON LOGGATO)
+# ---------------------------------------------------------
+LANDING_CSS = """
+<style>
+/* Nascondo header Streamlit e padding extra */
+header {visibility: hidden;}
+.block-container { padding-top: 1.2rem; }
+
+/* Sfondo WOW */
+.landing-bg{
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  padding: 34px 34px 28px 34px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 22px 60px rgba(0,0,0,.30);
+  background:
+    radial-gradient(1200px 500px at 20% 0%, rgba(59,130,246,.28), transparent 60%),
+    radial-gradient(900px 500px at 85% 10%, rgba(244,63,94,.22), transparent 55%),
+    linear-gradient(135deg, #071a33 0%, #0b2b52 48%, #1a0830 100%);
+}
+
+/* Linea luci (blu/rosso) */
+.landing-bg:before{
+  content:"";
+  position:absolute;
+  left:-10%;
+  top:22px;
+  width:120%;
+  height:2px;
+  background: linear-gradient(90deg, rgba(59,130,246,0) 0%, rgba(59,130,246,.9) 35%, rgba(244,63,94,.9) 65%, rgba(244,63,94,0) 100%);
+  filter: blur(.2px);
+  opacity:.95;
+}
+
+/* Titoli */
+.landing-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.92);
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.landing-title{
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: .2px;
+  font-size: 44px;
+  line-height: 1.08;
+  margin: 0 0 10px 0;
+}
+.landing-sub{
+  color: rgba(255,255,255,.86);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 820px;
+  margin-bottom: 16px;
+}
+.landing-chips{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom: 18px;
+}
+.landing-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(0,0,0,.18);
+  color: rgba(255,255,255,.90);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* Card login */
+.login-card{
+  margin-top: 16px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 20px;
+  padding: 18px 18px 16px 18px;
+  backdrop-filter: blur(10px);
+}
+.login-title{
+  color:#fff;
+  font-size: 20px;
+  font-weight: 900;
+  margin: 0 0 10px 0;
+}
+.login-hint{
+  color: rgba(255,255,255,.78);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* Input Streamlit dentro landing: li rendo “glass” */
+.landing-input [data-baseweb="input"] > div{
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.92) !important;
+}
+.landing-input input{
+  font-weight: 700 !important;
+}
+
+/* Bottone “Entra” gold */
+.landing-btn .stButton > button{
+  width: 100%;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  background: linear-gradient(180deg, #f7c777 0%, #e7a93d 100%) !important;
+  color: #1b1b1b !important;
+  font-weight: 900 !important;
+  box-shadow: 0 14px 30px rgba(231,169,61,.25) !important;
+}
+.landing-btn .stButton > button:hover{
+  transform: translateY(-1px);
+}
+</style>
+"""
+
+def render_landing_login(total_questions: int):
+    st.markdown(LANDING_CSS, unsafe_allow_html=True)
+
+    st.markdown('<div class="landing-bg">', unsafe_allow_html=True)
+
+    st.markdown(
+        """
+        <div class="landing-badge">🚓 Platform • Corso PL</div>
+        <div class="landing-title">Banca dati, simulazioni e quiz<br><span style="opacity:.92;">Polizia Locale</span></div>
+        <div class="landing-sub">
+          Piattaforma didattica a cura di <b>Raffaele Sotero</b> • Correzione finale dettagliata.<br>
+          Simulazioni d’esame, banca dati normativa e casi pratici commentati.
+        </div>
+        <div class="landing-chips">
+          <div class="landing-chip">📚 Banca dati: %d domande</div>
+          <div class="landing-chip">⏱️ 30 minuti</div>
+          <div class="landing-chip">✅ 1 punto per risposta esatta</div>
+        </div>
+        """ % (total_questions,),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">Accesso corsista</div>', unsafe_allow_html=True)
+
+    # Input (veri Streamlit) dentro la card
+    st.markdown('<div class="landing-input">', unsafe_allow_html=True)
+    full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
+    course_pass = st.text_input("Password del corso", type="password")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="landing-btn">', unsafe_allow_html=True)
+    go = st.button("Entra")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="login-hint">Accesso riservato ai corsisti • Inserisci Nome e Cognome e la password del corso.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)  # chiude login-card
+    st.markdown("</div>", unsafe_allow_html=True)  # chiude landing-bg
+
+    # Logica login (UGUALE alla tua, ma qui sopra)
+    if go:
+        if not full_name or not course_pass:
+            st.error("Inserisci Nome e Cognome + Password.")
+            st.stop()
+        if course_pass != COURSE_PASSWORD:
+            st.error("Password errata. Riprova.")
+            st.stop()
+
+        try:
+            st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
+            st.session_state["logged"] = True
+            st.session_state["menu_page"] = "home"
+            st.success("Accesso OK ✅")
+            st.rerun()
+        except Exception as e:
+            st.error("Errore accesso.")
+            st.exception(e)
+            st.stop()
+
+
+# Se NON loggato: mostro SOLO la landing WOW e STOP.
+if not st.session_state["logged"]:
+    render_landing_login(bank_count)
+    st.stop()
+
+# Se loggato: tutto come prima (header + tabs)
 render_header(bank_count)
 
 tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
-# =========================================================
-# DOCENTE
-# =========================================================
-with tab_doc:
     st.subheader("Carica banca dati (CSV)")
     st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
     st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
