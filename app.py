@@ -1,338 +1,47 @@
 import os
 import time
 import random
+import csv
+import io
+import base64
 from datetime import datetime, timezone
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-import streamlit as st
-import streamlit.components.v1 as components
-from supabase import create_client, Client
+# =========================================================
+# Dipendenze esterne (Streamlit + Supabase)
+# =========================================================
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+except ModuleNotFoundError:
+    raise SystemExit(
+        "Errore: manca la libreria 'streamlit'.\n"
+        "Questa app è una UI web e richiede Streamlit per funzionare.\n"
+        "Esegui (nel tuo venv):\n"
+        "  python -m pip install streamlit\n"
+        "Poi avvia con:\n"
+        '  python -m streamlit run "app (23).py"\n'
+    )
 
+try:
+    from supabase import create_client, Client
+except ModuleNotFoundError:
+    raise SystemExit(
+        "Errore: manca la libreria 'supabase'.\n"
+        "Questa app usa Supabase come database.\n"
+        "Installa nel venv:\n"
+        "  python -m pip install supabase\n"
+    )
 
 # =========================================================
 # PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
 # =========================================================
 st.set_page_config(
-    page_title="Banca dati, simulazioni e quiz — Polizia Locale",
+    page_title="Banca dati, simulazioni e quiz — Corso PL 2026",
     page_icon="🚓",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-# =========================================================
-# STILI (TEMA POLIZIA LOCALE)
-# =========================================================
-CUSTOM_CSS = """
-<style>
-:root{
-  --navy-900: #0b1d2b;
-  --navy-800: #0f2c44;
-  --navy-700: #123a5a;
-  --gold-500: #f2c14e;
-  --gold-200: #ffefb0;
-  --red-600: #c1121f;
-  --slate-700: #334155;
-  --slate-500: #64748b;
-  --ice: #f5f7fb;
-  --white: #ffffff;
-}
-
-@import url("https://fonts.googleapis.com/css2?family=Teko:wght@500;700&family=Source+Sans+3:wght@400;600;700&display=swap");
-
-/* layout */
-.block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
-
-/* background tematico */
-.stApp {
-  background-color: var(--ice);
-  background-image:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><circle cx='90' cy='80' r='60' fill='%23e11d48' stroke='%23ffefb0' stroke-width='10'/><rect x='82' y='135' width='16' height='80' rx='8' fill='%23a16207'/><rect x='55' y='45' width='70' height='12' fill='%23ffefb0' transform='rotate(-20 90 51)'/><rect x='55' y='80' width='70' height='12' fill='%23ffefb0' transform='rotate(-20 90 86)'/></svg>"),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='460' height='220' viewBox='0 0 460 220'><rect x='70' y='110' width='280' height='60' rx='16' fill='%230b4a6f'/><rect x='120' y='75' width='180' height='40' rx='12' fill='%231f6fa0'/><rect x='205' y='120' width='95' height='10' rx='5' fill='%23f2c14e'/><circle cx='130' cy='175' r='22' fill='%23111827'/><circle cx='300' cy='175' r='22' fill='%23111827'/><circle cx='350' cy='130' r='10' fill='%23f59e0b'/><rect x='90' y='95' width='55' height='10' rx='4' fill='%23e2e8f0'/></svg>"),
-    radial-gradient(1200px 600px at 10% -10%, rgba(242,193,78,0.18), transparent 60%),
-    linear-gradient(160deg, #f8fafc 0%, #edf2f7 40%, #f8fafc 100%);
-  background-repeat: no-repeat;
-  background-position: left 4% top 14%, right 4% bottom 6%, left top, center;
-  background-size: 220px, 360px, auto, cover;
-  font-family: "Source Sans 3", "Segoe UI", sans-serif;
-}
-
-/* card header */
-.hero {
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 18px;
-  padding: 18px 18px;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, .08);
-  margin-bottom: 18px;
-}
-.hero-title {
-  font-size: 32px;
-  font-weight: 700;
-  font-family: "Teko", "Oswald", sans-serif;
-  letter-spacing: .6px;
-  margin: 0;
-  color: var(--navy-900);
-}
-.hero-sub {
-  margin: 6px 0 0 0;
-  color: var(--slate-500);
-  font-size: 14px;
-  line-height: 1.4;
-}
-.badges { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
-.badge {
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, .1);
-  background: #f8fafc;
-  color: var(--navy-900);
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-}
-
-/* tabs */
-.stTabs [data-baseweb="tab-list"] {
-  gap: 10px;
-  padding: 8px 6px;
-  border-radius: 14px;
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-}
-.stTabs [data-baseweb="tab"] {
-  border-radius: 12px;
-  padding: 10px 14px;
-  color: var(--slate-700);
-  font-weight: 600;
-}
-.stTabs [aria-selected="true"] {
-  background: #f8fafc !important;
-  border: 1px solid rgba(15, 23, 42, .1) !important;
-}
-
-/* buttons */
-.stButton > button {
-  border-radius: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(15, 23, 42, .12);
-  background: var(--white);
-  color: var(--navy-900);
-  transition: all .12s ease-in-out;
-  font-weight: 700;
-}
-.stButton > button:hover {
-  transform: translateY(-1px);
-  background: #f8fafc;
-}
-
-/* radio / inputs */
-div[data-baseweb="input"] > div { border-radius: 12px !important; }
-.stRadio label { color: var(--navy-900); }
-
-/* alert */
-div[data-testid="stAlert"] {
-  border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, .1);
-}
-
-/* divider */
-hr { border-top: 1px solid rgba(0,0,0,.08); }
-
-/* =========================================
-   QUIZ CARD LOOK
-   ========================================= */
-.quiz-card{
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 16px;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, .08);
-  padding: 14px 14px 10px 14px;
-  margin: 10px 0 12px 0;
-}
-.quiz-title{
-  font-weight: 850;
-  font-size: 16px;
-  color: var(--navy-900);
-  margin: 0 0 6px 0;
-}
-
-/* =========================================
-   MENU CARDS
-   ========================================= */
-.menu-grid{
-  display:grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 10px;
-}
-@media (max-width: 980px){
-  .menu-grid{ grid-template-columns: 1fr; }
-}
-.menu-card{
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 16px;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, .08);
-  padding: 14px 14px;
-}
-.menu-title{
-  font-size: 16px;
-  font-weight: 850;
-  color: var(--navy-900);
-  margin: 0 0 6px 0;
-}
-.menu-desc{
-  color: var(--slate-500);
-  font-size: 13px;
-  margin: 0 0 12px 0;
-  line-height: 1.35;
-}
-.menu-chip{
-  display:inline-flex;
-  align-items:center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, .1);
-  background:#f8fafc;
-  color:var(--navy-900);
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-
-/* =========================================
-   BOTTONE ROSSO SOLO PER "TERMINA"
-   ========================================= */
-.end-btn-wrap .stButton > button{
-  background: var(--red-600) !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(0,0,0,.12) !important;
-  box-shadow: 0 10px 22px rgba(193,18,31,.22) !important;
-}
-.end-btn-wrap .stButton > button:hover{
-  background: #a60f1b !important;
-  transform: translateY(-1px);
-}
-
-/* === Stato risposta (pill verde/gialla) === */
-.status-pill{
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, .1);
-  margin: 8px 0 10px 0;
-  font-size: 13px;
-}
-.status-pill.ok{
-  background: rgba(34,197,94,0.12);
-}
-.status-pill.warn{
-  background: rgba(245,158,11,0.14);
-}
-
-/* login hero */
-.police-hero{
-  background: linear-gradient(135deg, var(--navy-900), var(--navy-700));
-  color: var(--white);
-  padding: 38px 36px;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, .28);
-  position: relative;
-  overflow: hidden;
-}
-.police-hero:after{
-  content: "";
-  position: absolute;
-  inset: -40% -30% auto auto;
-  width: 320px;
-  height: 320px;
-  background: radial-gradient(circle, rgba(242,193,78,.25), transparent 60%);
-  transform: rotate(12deg);
-}
-.police-hero-title{
-  font-family: "Teko", "Oswald", sans-serif;
-  font-size: 44px;
-  letter-spacing: .8px;
-  margin: 0 0 10px 0;
-}
-.police-hero-sub{
-  font-size: 16px;
-  line-height: 1.5;
-  margin: 0 0 18px 0;
-  color: rgba(255,255,255,.88);
-}
-.police-hero-grid{
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-.police-hero-card{
-  background: rgba(255,255,255,.12);
-  border: 1px solid rgba(255,255,255,.2);
-  border-radius: 14px;
-  padding: 14px;
-  backdrop-filter: blur(6px);
-}
-.police-hero-card strong{
-  display:block;
-  margin-bottom: 6px;
-  font-size: 14px;
-}
-.login-panel{
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 18px;
-  padding: 22px;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
-}
-div[data-testid="stForm"]{
-  background: var(--white);
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 18px;
-  padding: 18px 20px 20px;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, .12);
-}
-div[data-testid="stForm"] .stButton > button{
-  width: 100%;
-  background: var(--navy-900);
-  color: var(--white);
-  border: 1px solid rgba(15, 23, 42, .2);
-}
-div[data-testid="stForm"] .stButton > button:hover{
-  background: var(--navy-800);
-}
-.login-title{
-  font-family: "Teko", "Oswald", sans-serif;
-  font-size: 28px;
-  margin: 0 0 6px 0;
-  color: var(--navy-900);
-}
-.login-sub{
-  color: var(--slate-500);
-  margin: 0 0 14px 0;
-}
-.login-highlight{
-  display:inline-flex;
-  align-items:center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(242,193,78,.2);
-  color: var(--navy-900);
-  font-weight: 700;
-  font-size: 12px;
-}
-.fade-in{
-  animation: fadeInUp .5s ease-out;
-}
-@keyframes fadeInUp{
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-</style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # =========================================================
 # COSTANTI
@@ -340,47 +49,11 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
 
-# =========================================================
-# ACCESSO CORSO
-# =========================================================
 COURSE_PASSWORD = "polizia2026"
 COURSE_CLASS_CODE = "CORSO_PL_2026"
 
 # =========================================================
-# TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
-# =========================================================
-def render_live_timer(end_ts: float):
-    """
-    Mostra un countdown fluido aggiornato ogni 1s lato browser.
-    NON provoca rerun Streamlit -> niente schermo che scurisce.
-    """
-    end_ms = int(end_ts * 1000)
-    components.html(
-        f"""
-        <div style="margin: 0 0 10px 0;">
-          <div style="font-size: 20px; font-weight: 800; color:#111827;">
-            ⏱️ Tempo residuo: <span id="tval">--:--</span>
-          </div>
-        </div>
-        <script>
-          const end = {end_ms};
-          function pad(n) {{ return String(n).padStart(2,'0'); }}
-          function tick(){{
-            const now = Date.now();
-            let remaining = Math.max(0, Math.floor((end - now)/1000));
-            const m = Math.floor(remaining/60);
-            const s = remaining % 60;
-            document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
-          }}
-          tick();
-          setInterval(tick, 1000);
-        </script>
-        """,
-        height=40,
-    )
-
-# =========================================================
-# SUPABASE
+# Helpers
 # =========================================================
 def get_secret(name: str, default: str = "") -> str:
     try:
@@ -391,6 +64,56 @@ def get_secret(name: str, default: str = "") -> str:
         pass
     return os.getenv(name, default)
 
+
+def load_local_background_base64(
+    filenames: tuple[str, ...] = ("background.jpg", "background.jpeg", "background.png", "bg.jpg", "bg.png")
+) -> Optional[str]:
+    """
+    Carica un file immagine locale (se presente) e lo converte in data URL base64
+    per usarlo come background in CSS.
+    """
+    for fn in filenames:
+        if os.path.exists(fn) and os.path.isfile(fn):
+            ext = fn.split(".")[-1].lower()
+            mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+            with open(fn, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            return f"data:{mime};base64,{b64}"
+    return None
+
+
+def render_live_timer(end_ts: float):
+    """
+    Countdown fluido aggiornato lato browser (no rerun Streamlit).
+    """
+    end_ms = int(end_ts * 1000)
+    components.html(
+        f"""
+        <div class="timer-wrap">
+          <div class="timer-label">⏱️ Tempo residuo: <span id="tval">--:--</span></div>
+        </div>
+        <script>
+          const end = {end_ms};
+          function pad(n) {{ return String(n).padStart(2,'0'); }}
+          function tick(){{
+            const now = Date.now();
+            let remaining = Math.max(0, Math.floor((end - now)/1000));
+            const m = Math.floor(remaining/60);
+            const s = remaining % 60;
+            const el = document.getElementById("tval");
+            if (el) el.textContent = pad(m) + ":" + pad(s);
+          }}
+          tick();
+          setInterval(tick, 1000);
+        </script>
+        """,
+        height=44,
+    )
+
+
+# =========================================================
+# SUPABASE INIT
+# =========================================================
 SUPABASE_URL = get_secret("SUPABASE_URL")
 SUPABASE_ANON_KEY = get_secret("SUPABASE_ANON_KEY")
 ADMIN_CODE = get_secret("ADMIN_CODE", "DOCENTE123")
@@ -423,6 +146,7 @@ def upsert_student(class_code: str, nickname: str) -> Dict:
     ins = sb.table("students").insert({"class_code": class_code, "nickname": nickname}).execute().data
     return ins[0]
 
+
 def create_session(student_id: int, n_questions: int) -> Dict:
     payload = {
         "student_id": student_id,
@@ -434,15 +158,19 @@ def create_session(student_id: int, n_questions: int) -> Dict:
     }
     return sb.table("sessions").insert(payload).execute().data[0]
 
+
 def finish_session(session_id: str) -> None:
     sb.table("sessions").update({"finished_at": datetime.now(timezone.utc).isoformat()}).eq("id", session_id).execute()
+
 
 def fetch_bank_count() -> int:
     res = sb.table("question_bank").select("id", count="exact").limit(1).execute()
     return int(res.count or 0)
 
+
 def fetch_all_bank_questions() -> List[Dict]:
     return sb.table("question_bank").select("*").order("id").execute().data or []
+
 
 def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
     rows = []
@@ -483,6 +211,7 @@ def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
 
+
 def fetch_session_questions(session_id: str) -> List[Dict]:
     return (
         sb.table("quiz_answers")
@@ -494,8 +223,66 @@ def fetch_session_questions(session_id: str) -> List[Dict]:
         or []
     )
 
-def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None) -> None:
+
+def update_chosen_option(row_id: int, session_id: str, chosen_letter: Optional[str]) -> None:
     sb.table("quiz_answers").update({"chosen_option": chosen_letter}).eq("id", row_id).eq("session_id", session_id).execute()
+
+
+# =========================================================
+# CSV upload (no pandas)
+# =========================================================
+REQUIRED_COLUMNS = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
+
+def parse_csv_questions(raw_bytes: bytes) -> List[Dict]:
+    """
+    Legge CSV da bytes con encoding robusto. Non richiede pandas.
+    Supporta colonna opzionale: explanation
+    """
+    text = None
+    for enc in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            text = raw_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            text = None
+
+    if text is None:
+        raise ValueError("Impossibile decodificare il CSV. Salvalo come UTF-8 (consigliato).")
+
+    reader = csv.DictReader(io.StringIO(text))
+    cols = reader.fieldnames or []
+    missing = [c for c in REQUIRED_COLUMNS if c not in cols]
+    if missing:
+        raise ValueError(f"Mancano colonne richieste: {missing}")
+
+    rows: List[Dict] = []
+    for i, r in enumerate(reader, start=2):  # 1 = header, quindi dati da riga 2
+        rr = {k: (r.get(k, "") or "").strip() for k in cols}
+        rr.setdefault("explanation", "")
+        rr["correct_option"] = rr["correct_option"].upper()
+
+        if rr["correct_option"] not in ("A", "B", "C", "D"):
+            raise ValueError(f"Riga {i}: correct_option non valido ({rr['correct_option']}). Deve essere A/B/C/D.")
+
+        if rr["correct_option"] == "D" and rr.get("option_d", "") == "":
+            raise ValueError(f"Riga {i}: correct_option = D ma option_d è vuota.")
+
+        rows.append(
+            {
+                "question_text": rr["question_text"],
+                "option_a": rr["option_a"],
+                "option_b": rr["option_b"],
+                "option_c": rr["option_c"],
+                "option_d": rr["option_d"],
+                "correct_option": rr["correct_option"],
+                "explanation": rr.get("explanation", ""),
+            }
+        )
+
+    if not rows:
+        raise ValueError("CSV vuoto: nessuna domanda trovata.")
+    return rows
+
 
 # =========================================================
 # SESSION STATE
@@ -511,8 +298,7 @@ def ss_init():
         "finished_ts": None,
         "duration_seconds": DURATION_SECONDS_DEFAULT,
         "n_questions": N_QUESTIONS_DEFAULT,
-        # NUOVO: pagina menu dopo login
-        "menu_page": "home",   # home | sim | bank | case
+        "menu_page": "home",  # home | sim | bank | case
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -521,53 +307,369 @@ def ss_init():
 ss_init()
 
 # =========================================================
-# HEADER
+# THEME / UI — Stile "super professionale" (come immagine)
 # =========================================================
-def render_header(total_questions: int):
+BG_DATA_URL = load_local_background_base64()
+BG_CSS = f'url("{BG_DATA_URL}")' if BG_DATA_URL else "none"
+
+CUSTOM_CSS = f"""
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Oswald:wght@400;600&display=swap");
+
+:root {{
+  --bg0: #070A12;
+  --bg1: #0B1220;
+  --text: rgba(255,255,255,.92);
+  --muted: rgba(255,255,255,.72);
+
+  --glass: rgba(255,255,255,.10);
+  --glass2: rgba(255,255,255,.14);
+  --stroke: rgba(255,255,255,.16);
+
+  --gold: #E6B25A;
+  --gold2:#F2C76D;
+  --navy: #0B1D2B;
+  --blue: #1A5CFF;
+  --red: #FF2D55;
+
+  --shadow: 0 22px 60px rgba(0,0,0,.40);
+}}
+
+html, body, [class*="css"] {{
+  font-family: Inter, "Segoe UI", sans-serif;
+}}
+
+.stApp {{
+  background:
+    radial-gradient(1000px 500px at 18% 15%, rgba(26,92,255,.35), transparent 58%),
+    radial-gradient(900px 500px at 82% 18%, rgba(255,45,85,.35), transparent 60%),
+    radial-gradient(1200px 900px at 55% 110%, rgba(255,255,255,.07), transparent 55%),
+    linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 100%);
+  color: var(--text);
+  {f"background-image: {BG_CSS}; background-size: cover; background-position: center; background-repeat: no-repeat;" if BG_DATA_URL else ""}
+}}
+
+.block-container {{
+  max-width: 1200px;
+  padding-top: 1.2rem;
+  padding-bottom: 2.4rem;
+}}
+
+header, footer {{
+  visibility: hidden;
+  height: 0px;
+}}
+
+div[data-testid="stSidebar"] {{
+  display: none;
+}}
+
+a {{
+  color: var(--gold2);
+}}
+
+.top-pill {{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.22);
+  font-weight: 700;
+  letter-spacing: .3px;
+}}
+
+.hero-title {{
+  font-family: Oswald, Inter, sans-serif;
+  font-size: 54px;
+  line-height: 1.02;
+  margin: 18px 0 10px 0;
+  text-shadow: 0 10px 30px rgba(0,0,0,.35);
+}}
+
+.hero-sub {{
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+  max-width: 760px;
+}}
+
+.hero-actions {{
+  margin-top: 14px;
+  display:flex;
+  gap:10px;
+  flex-wrap: wrap;
+  align-items: center;
+}}
+
+.chip {{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+}}
+
+.login-shell {{
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: 18px;
+  align-items: stretch;
+}}
+@media (max-width: 980px){{
+  .login-shell {{ grid-template-columns: 1fr; }}
+}}
+
+.glass-card {{
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+  position: relative;
+}}
+
+.glass-card:before {{
+  content:"";
+  position:absolute;
+  inset: 0;
+  background:
+    radial-gradient(500px 200px at 18% 10%, rgba(26,92,255,.18), transparent 60%),
+    radial-gradient(500px 200px at 82% 10%, rgba(255,45,85,.18), transparent 62%);
+  pointer-events: none;
+}}
+
+.card-pad {{
+  padding: 22px 22px;
+  position: relative;
+  z-index: 1;
+}}
+
+.card-title {{
+  font-family: Oswald, Inter, sans-serif;
+  font-size: 30px;
+  margin: 0 0 6px 0;
+}}
+
+.card-sub {{
+  margin: 0 0 14px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}}
+
+.divider-soft {{
+  height: 1px;
+  background: rgba(255,255,255,.14);
+  margin: 14px 0;
+}}
+
+.small-note {{
+  color: rgba(255,255,255,.68);
+  font-size: 12px;
+}}
+
+.timer-wrap {{
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  padding: 10px 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 22px rgba(0,0,0,.22);
+}}
+.timer-label {{
+  font-weight: 900;
+  letter-spacing: .2px;
+}}
+
+.stTabs [data-baseweb="tab-list"] {{
+  gap: 10px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+}}
+.stTabs [data-baseweb="tab"] {{
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: rgba(255,255,255,.78);
+  font-weight: 800;
+}}
+.stTabs [aria-selected="true"] {{
+  background: rgba(255,255,255,.12) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  color: rgba(255,255,255,.92) !important;
+}}
+
+div[data-testid="stForm"] {{
+  background: transparent;
+  border: 0;
+  padding: 0;
+}}
+
+label, .stRadio label {{
+  color: rgba(255,255,255,.86) !important;
+}}
+
+div[data-baseweb="input"] > div {{
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.10) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+}}
+div[data-baseweb="base-input"] input {{
+  color: rgba(255,255,255,.92) !important;
+}}
+div[data-baseweb="base-input"] input::placeholder {{
+  color: rgba(255,255,255,.55) !important;
+}}
+
+.stButton > button {{
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 900;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.92);
+  transition: transform .12s ease, background .12s ease;
+}}
+.stButton > button:hover {{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.14);
+}}
+
+.primary-gold .stButton > button {{
+  width: 100%;
+  background: linear-gradient(180deg, var(--gold2), var(--gold));
+  color: #1b1b1b;
+  border: 1px solid rgba(0,0,0,.12);
+  box-shadow: 0 14px 30px rgba(230,178,90,.28);
+}}
+.primary-gold .stButton > button:hover {{
+  background: linear-gradient(180deg, #FFD98B, var(--gold2));
+}}
+
+.menu-grid {{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}}
+@media (max-width: 980px){{
+  .menu-grid {{ grid-template-columns: 1fr; }}
+}}
+.menu-card {{
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  padding: 16px 16px;
+}}
+.menu-card h3 {{
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  letter-spacing: .2px;
+}}
+.menu-card p {{
+  margin: 0 0 10px 0;
+  color: rgba(255,255,255,.72);
+  line-height: 1.45;
+}}
+.menu-pill {{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}}
+
+.quiz-card {{
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.28);
+  padding: 14px 14px 10px 14px;
+  margin: 10px 0 12px 0;
+  backdrop-filter: blur(10px);
+}}
+.quiz-title {{
+  font-weight: 900;
+  font-size: 15px;
+  color: rgba(255,255,255,.92);
+  margin: 0 0 6px 0;
+}}
+
+.status-pill {{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.16);
+  margin: 8px 0 10px 0;
+  font-size: 13px;
+  background: rgba(255,255,255,.08);
+  backdrop-filter: blur(10px);
+}}
+.status-pill.ok {{
+  border-color: rgba(34,197,94,.35);
+}}
+.status-pill.warn {{
+  border-color: rgba(245,158,11,.35);
+}}
+
+.end-btn-wrap .stButton > button {{
+  background: linear-gradient(180deg, #FF4D4D, #D61F2A) !important;
+  color: #fff !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  box-shadow: 0 14px 30px rgba(214,31,42,.26) !important;
+}}
+.end-btn-wrap .stButton > button:hover {{
+  background: linear-gradient(180deg, #FF6B6B, #E02B36) !important;
+}}
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+# =========================================================
+# UI Blocks
+# =========================================================
+def render_top_hero(bank_count: int):
     st.markdown(
         f"""
-<div class="hero">
-  <div class="hero-title">🚓 Banca dati, simulazioni e quiz — Polizia Locale</div>
-  <div class="hero-sub">
-    Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
-    Casi pratici • Quiz • Banca dati • Correzione finale dettagliata
-  </div>
-  <div class="badges">
-    <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
-    <div class="badge">⏱️ <strong>Tempo</strong>: {DURATION_SECONDS_DEFAULT//60} minuti</div>
-    <div class="badge">✅ <strong>Valutazione</strong>: 1 punto per risposta esatta</div>
-  </div>
-</div>
-""",
+        <div class="top-pill">🚓 <span>PLATFORM</span> <span style="opacity:.55;">•</span> <span>CORSO PL 2026</span></div>
+        <div class="hero-title">Banca dati, simulazioni e quiz</div>
+        <div class="hero-sub">
+          Piattaforma didattica a cura di <b>Raffaele Sotero</b><br/>
+          Correzione finale dettagliata • Casi pratici • Quiz • Banca dati
+        </div>
+        <div class="hero-actions">
+          <div class="chip">📚 Banca dati: <b>{bank_count}</b> domande</div>
+          <div class="chip">⏱️ Simulazione: <b>{DURATION_SECONDS_DEFAULT//60}</b> minuti</div>
+          <div class="chip">✅ Valutazione: <b>1 punto</b> per risposta esatta</div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
+
 # =========================================================
-# APP
+# APP START
 # =========================================================
 bank_count = fetch_bank_count()
-render_header(bank_count)
-# ===============================
-# HERO / LANDING PAGE
-# ===============================
-st.markdown(
-    """
-<div class="police-hero fade-in">
-  <div class="login-highlight">🚨 Accesso riservato al corso</div>
-  <div class="police-hero-title">Polizia Locale — Area Formazione</div>
-  <div class="police-hero-sub">
-    Schermata a tema con paletta e auto della Polizia Locale sullo sfondo.
-    Accedi con nome e cognome + password corso per entrare nelle simulazioni.
-  </div>
-  <div class="police-hero-grid">
-    <div class="police-hero-card"><strong>🚓 Simulazioni con timer</strong>Prove d'esame realistiche con correzione finale.</div>
-    <div class="police-hero-card"><strong>📚 Banca dati normativa</strong>Studio guidato con materiali ufficiali.</div>
-    <div class="police-hero-card"><strong>⚖️ Casi pratici operativi</strong>Scenario e risposta sintetica, utile per il corso.</div>
-  </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+render_top_hero(bank_count)
 
 tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
@@ -575,109 +677,102 @@ tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"
 # DOCENTE
 # =========================================================
 with tab_doc:
-    st.subheader("Carica banca dati (CSV)")
-    st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
-    st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
+    st.markdown(
+        """
+        <div class="glass-card">
+          <div class="card-pad">
+            <div class="card-title">Area Docente</div>
+            <div class="card-sub">Carica la banca dati (CSV) in modo sicuro e controllato.</div>
+            <div class="divider-soft"></div>
+            <div class="small-note">
+              CSV richiesto: <b>question_text, option_a, option_b, option_c, option_d, correct_option</b>
+              (+ opzionale <b>explanation</b>).<br/>
+              Nota: <b>option_d</b> può essere vuota, ma allora <b>correct_option</b> non può essere D.
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    admin = st.text_input("Codice docente", type="password")
+    admin = st.text_input("Codice docente", type="password", placeholder="Inserisci codice docente…")
     up = st.file_uploader("Carica CSV", type=["csv"])
 
-    st.divider()
-    st.write("Domande in banca dati:", fetch_bank_count())
+    st.write(f"Domande attuali in banca dati: **{fetch_bank_count()}**")
 
     if up and admin == ADMIN_CODE:
-        import pandas as pd
-        import io
-
-        raw = up.getvalue()
-        df = None
-        for enc in ("utf-8-sig", "utf-8", "latin1"):
-            try:
-                df = pd.read_csv(io.BytesIO(raw), encoding=enc)
-                break
-            except Exception:
-                df = None
-
-        if df is None:
-            st.error("Impossibile leggere il CSV. Salvalo come UTF-8.")
-            st.stop()
-
-        required = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
-        miss = [c for c in required if c not in df.columns]
-        if miss:
-            st.error(f"Mancano colonne: {miss}")
-            st.stop()
-
-        if "explanation" not in df.columns:
-            df["explanation"] = ""
-
-        df = df.fillna("")
-        df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
-        df["option_d"] = df["option_d"].astype(str).fillna("").str.strip()
-
-        bad = ~df["correct_option"].isin(["A", "B", "C", "D"])
-        if bad.any():
-            st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D).")
-            st.dataframe(df.loc[bad, ["question_text", "correct_option"]].head(10))
-            st.stop()
-
-        bad_d = (df["option_d"] == "") & (df["correct_option"] == "D")
-        if bad_d.any():
-            st.error("Righe con correct_option = D ma option_d vuota. Correggi il CSV.")
-            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
-            st.stop()
-
-        rows = df[required + ["explanation"]].to_dict(orient="records")
-
         try:
+            raw = up.getvalue()
+            rows = parse_csv_questions(raw)
             sb.table("question_bank").insert(rows).execute()
             st.success(f"Caricate {len(rows)} domande ✅")
             st.rerun()
         except Exception as e:
-            st.error("Errore inserimento in question_bank.")
+            st.error("Errore durante la lettura o l'inserimento del CSV.")
             st.exception(e)
 
     elif up and admin != ADMIN_CODE:
         st.warning("Codice docente errato.")
 
+
 # =========================================================
 # CORSISTA
 # =========================================================
 with tab_stud:
-    st.subheader("Accesso corsista")
-
     # ---------- LOGIN ----------
     if not st.session_state["logged"]:
-        col_left, col_right = st.columns([3, 2])
+        st.markdown('<div class="login-shell">', unsafe_allow_html=True)
 
-        with col_left:
-            st.markdown("### Benvenuto/a nel corso Polizia Locale")
-            st.write(
-                "Accedi per iniziare le simulazioni, consultare la banca dati e "
-                "gestire i casi pratici. Il timer è attivo solo nella modalità simulazione."
-            )
+        # Left: info panel
+        st.markdown(
+            """
+            <div class="glass-card">
+              <div class="card-pad">
+                <div class="card-title">Area Formazione — Polizia Locale</div>
+                <div class="card-sub">
+                  Accedi per iniziare le simulazioni con timer, consultare i materiali e svolgere casi pratici.
+                </div>
+                <div class="divider-soft"></div>
+                <div class="menu-pill">🚨 Accesso riservato ai corsisti</div>
+                <div class="small-note">
+                  Suggerimento: se vuoi lo sfondo identico al tuo esempio, metti un file <b>background.jpg</b> nella stessa cartella del programma.
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Right: login card (Streamlit form)
+        with st.container():
             st.markdown(
-                '<div class="login-highlight">🔒 Accesso riservato ai corsisti</div>',
+                """
+                <div class="glass-card">
+                  <div class="card-pad">
+                    <div class="card-title">Accesso corsista</div>
+                    <div class="card-sub">Inserisci <b>Nome e Cognome</b> e la <b>password del corso</b>.</div>
+                  </div>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
 
-        with col_right:
             with st.form("login_form", clear_on_submit=False):
-                st.markdown('<div class="login-title">Accesso corsista</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="login-sub">Inserisci nome, cognome e password del corso.</div>',
-                    unsafe_allow_html=True,
+                full_name = st.text_input(
+                    "Nome e Cognome",
+                    placeholder="es. Mario Rossi",
                 )
-                full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
                 course_pass = st.text_input(
-                    "Password corso",
+                    "Password del corso",
                     type="password",
-                    help="Inserisci la password per accedere (es. polizia2026)",
+                    placeholder="Inserisci password…",
                 )
-                submitted = st.form_submit_button("Entra nel corso")
+                st.markdown('<div class="primary-gold">', unsafe_allow_html=True)
+                submitted = st.form_submit_button("Entra")
+                st.markdown("</div>", unsafe_allow_html=True)
 
             if submitted:
-                if not full_name or not course_pass:
+                if not full_name.strip() or not course_pass.strip():
                     st.error("Inserisci Nome e Cognome + Password.")
                 elif course_pass != COURSE_PASSWORD:
                     st.error("Password errata. Riprova.")
@@ -692,13 +787,14 @@ with tab_stud:
                         st.error("Errore accesso.")
                         st.exception(e)
 
+        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
 
     # ---------- PROFILO ----------
     student = st.session_state["student"]
     st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
 
-    col1, col2, col3 = st.columns([1, 1, 5])
+    col1, col2, col3 = st.columns([1, 1, 6])
     with col1:
         if st.button("🏠 Menu"):
             st.session_state["menu_page"] = "home"
@@ -722,112 +818,98 @@ with tab_stud:
     st.divider()
 
     # =========================================================
-    # MENU DOPO LOGIN (NUOVO)
+    # MENU DOPO LOGIN
     # =========================================================
     if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "home":
         st.markdown("## Seleziona modalità")
-        st.caption("Scegli cosa vuoi fare oggi. La simulazione ha il timer; banca dati e caso pratico per ora sono in modalità base.")
+        st.caption("Simulazione con timer, oppure studio libero e casi pratici.")
 
-        # layout a 3 card
         st.markdown('<div class="menu-grid">', unsafe_allow_html=True)
 
         st.markdown(
             """
             <div class="menu-card">
-              <div class="menu-chip">⏱️ Timer attivo</div>
-              <div class="menu-title">Simulazione Quiz (30 minuti)</div>
-              <div class="menu-desc">
-                30 domande estratte casualmente dalla banca dati. Alla fine vedi punteggio e correzione dettagliata.
-              </div>
+              <div class="menu-pill">⏱️ Timer attivo</div>
+              <h3>Simulazione Quiz (30 minuti)</h3>
+              <p>30 domande estratte casualmente. Correzione finale con spiegazioni (se presenti).</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("➡️ Vai alla Simulazione"):
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-pill">📚 Studio libero</div>
+              <h3>Banca dati</h3>
+              <p>Materiali PDF e consultazione senza timer. (Espandibile con filtri per argomento)</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-pill">🧠 Allenamento</div>
+              <h3>Caso pratico</h3>
+              <p>Scenario operativo + risposta. (Espandibile con griglia e feedback)</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("➡️ Vai alla Simulazione", use_container_width=True):
                 st.session_state["menu_page"] = "sim"
                 st.rerun()
-
-        st.markdown(
-            """
-            <div class="menu-card">
-              <div class="menu-chip">📚 Studio libero</div>
-              <div class="menu-title">Banca dati</div>
-              <div class="menu-desc">
-                Modalità studio: sfoglia le domande e allenati senza timer. (In arrivo: filtri per argomento)
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with c2:
-            if st.button("➡️ Vai alla Banca dati"):
+        with b2:
+            if st.button("➡️ Vai alla Banca dati", use_container_width=True):
                 st.session_state["menu_page"] = "bank"
                 st.rerun()
-
-        st.markdown(
-            """
-            <div class="menu-card">
-              <div class="menu-chip">🧠 Allenamento</div>
-              <div class="menu-title">Caso pratico</div>
-              <div class="menu-desc">
-                Rispondi a uno scenario operativo. (In arrivo: correzione guidata e griglia di valutazione)
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with c3:
-            if st.button("➡️ Vai al Caso pratico"):
+        with b3:
+            if st.button("➡️ Vai al Caso pratico", use_container_width=True):
                 st.session_state["menu_page"] = "case"
                 st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
 
     # =========================================================
-    # =========================================================
-    # BANCA DATI (PDF materiali di studio) - NO TIMER
+    # BANCA DATI (PDF)
     # =========================================================
     if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
         st.markdown("## 📚 Banca dati")
         st.caption("Materiali di studio consultabili (PDF).")
 
-        # Stato selezione documento
-        if "bank_doc" not in st.session_state:
-            st.session_state["bank_doc"] = None
-
-        # Documenti disponibili
         docs = [
             {
                 "title": "LEGGE QUADRO (Legge 7 marzo 1986, n. 65)",
-                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/legge%20quadro%20completa.pdf",
+                "url": "https://example.invalid/storage/study/legge-quadro.pdf",
             },
             {
                 "title": "CODICE DELLA STRADA (D.Lgs. 30 aprile 1992, n. 285)",
-                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/cds%20completo.pdf",
+                "url": "https://example.invalid/storage/study/cds.pdf",
             },
         ]
 
-                # Lista argomenti (clic diretto -> apre PDF in nuova scheda)
         st.markdown("### Seleziona un argomento (si apre in una nuova scheda)")
         for d in docs:
             st.link_button(f"📄 {d['title']}", d["url"], use_container_width=True)
 
         st.stop()
 
-
     # =========================================================
-    # CASO PRATICO (placeholder, NO timer)
+    # CASO PRATICO
     # =========================================================
     if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "case":
         st.markdown("## 🧠 Caso pratico")
-        st.caption("Qui inseriremo casi pratici per argomento. Per ora è una versione base senza correzione automatica.")
+        st.caption("Versione base senza correzione automatica (espandibile).")
 
         st.markdown("### Scenario (demo)")
         st.write(
-            "Durante un controllo, un conducente circola con documento di guida non esibito al momento del controllo e sostiene di averlo dimenticato a casa."
+            "Durante un controllo, un conducente circola con documento di guida non esibito al momento "
+            "del controllo e sostiene di averlo dimenticato a casa."
         )
         ans = st.text_area("Scrivi la tua risposta (sintetica ma completa):", height=140)
 
@@ -842,18 +924,17 @@ with tab_stud:
         st.stop()
 
     # =========================================================
-    # SIMULAZIONE (timer SOLO QUI)
+    # SIMULAZIONE
     # =========================================================
     if bank_count < N_QUESTIONS_DEFAULT:
         st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande per la simulazione. Ora: {bank_count}")
         st.stop()
 
-    # ---------- START SIM (solo se menu_page == sim) ----------
     if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "sim":
-        st.markdown("### Simulazione (30 domande – 30 minuti)")
-        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer parte SOLO in questa modalità.")
+        st.markdown("## Simulazione")
+        st.caption("30 domande – 30 minuti. Il timer parte solo qui.")
 
-        if st.button("Inizia simulazione"):
+        if st.button("Inizia simulazione", use_container_width=True):
             try:
                 sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS_DEFAULT)
                 st.session_state["session_id"] = sess["id"]
@@ -884,20 +965,18 @@ with tab_stud:
             st.error("Sessione senza domande (quiz_answers vuota).")
             st.stop()
 
-        elapsed = int(time.time() - float(st.session_state["started_ts"]))
-        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
-
-        # TIMER SUPER FLUIDO (NO RERUN)
         end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
         time_up = time.time() >= end_ts
+
         render_live_timer(end_ts)
 
+        elapsed = int(time.time() - float(st.session_state["started_ts"]))
+        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
         progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
         st.progress(min(max(progress, 0.0), 1.0))
         st.divider()
 
-        # controllo scadenza
-        if time.time() >= end_ts:
+        if time_up:
             st.warning("Tempo scaduto! Correzione automatica…")
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
@@ -909,11 +988,10 @@ with tab_stud:
 
         answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
         st.markdown(
-            f'<div class="badge">✅ <strong>Risposte date</strong>: {answered}/{len(rows)}</div>',
+            f'<div class="chip">✅ Risposte date: <b>{answered}/{len(rows)}</b></div>',
             unsafe_allow_html=True
         )
 
-        # Lettere "bold" compatibili con radio (no markdown)
         BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
 
         for idx, row in enumerate(rows, start=1):
@@ -941,7 +1019,7 @@ with tab_stud:
             def fmt(opt: str) -> str:
                 if opt == "—":
                     return "— (lascia senza risposta)"
-                return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
+                return f"{BOLD_LETTER.get(opt, opt)}) {options_map[opt]}"
 
             current = (row.get("chosen_option") or "").strip().upper()
             if current not in letters:
@@ -957,7 +1035,7 @@ with tab_stud:
             )
 
             new_val = None if choice == "—" else choice
-            old_val = (row.get("chosen_option") or None)
+            old_val = row.get("chosen_option") or None
 
             if (not time_up) and (new_val != old_val):
                 try:
@@ -979,7 +1057,7 @@ with tab_stud:
             st.divider()
 
         st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
-        if st.button("Termina simulazione e vedi correzione"):
+        if st.button("Termina simulazione e vedi correzione", use_container_width=True):
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = True
             st.session_state["finished_ts"] = time.time()
@@ -1047,7 +1125,7 @@ with tab_stud:
 
         st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
 
-        if st.button("Torna al menu"):
+        if st.button("Torna al menu", use_container_width=True):
             st.session_state["session_id"] = None
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = False
@@ -1056,168 +1134,4 @@ with tab_stud:
             st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
             st.session_state["menu_page"] = "home"
             st.rerun()
-
-# =========================================================
-# PADDING (non rimuovere nulla)
-# =========================================================
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
-# padding
+```
