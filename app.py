@@ -616,12 +616,83 @@ with tab_stud:
     # BANCA DATI (placeholder, NO timer)
     # =========================================================
     if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
-        st.markdown("## 📚 Banca dati")
-        st.caption("Qui faremo la modalità studio senza timer. Per ora è una schermata base, poi aggiungiamo filtri per argomenti e ricerca.")
+       if (
+    not st.session_state["in_progress"]
+    and not st.session_state["show_results"]
+    and st.session_state["menu_page"] == "bank"
+):
+    st.markdown("## 📚 Banca dati")
+    st.caption("Seleziona un argomento per aprire il materiale di studio.")
 
-        if bank_count <= 0:
-            st.warning("La banca dati è vuota: carica un CSV dal tab Docente.")
-            st.stop()
+    # carico argomenti dal DB
+    topics = (
+        sb.table("study_topics")
+        .select("*")
+        .eq("is_active", True)
+        .order("sort_order")
+        .execute()
+        .data
+        or []
+    )
+
+    if not topics:
+        st.warning("Nessun argomento disponibile.")
+        st.stop()
+
+    # inizializzo selezione
+    if "selected_topic_id" not in st.session_state:
+        st.session_state["selected_topic_id"] = None
+
+    # === LISTA ARGOMENTI ===
+    if st.session_state["selected_topic_id"] is None:
+        for t in topics:
+            colA, colB = st.columns([6, 1])
+            with colA:
+                st.markdown(f"### {t['title']}")
+                if t.get("subtitle"):
+                    st.caption(t["subtitle"])
+            with colB:
+                if st.button("Apri", key=f"open_topic_{t['id']}"):
+                    st.session_state["selected_topic_id"] = t["id"]
+                    st.rerun()
+
+        st.stop()
+
+    # === VISUALIZZA ARGOMENTO ===
+    topic = next(
+        (x for x in topics if x["id"] == st.session_state["selected_topic_id"]),
+        None,
+    )
+
+    if topic is None:
+        st.session_state["selected_topic_id"] = None
+        st.rerun()
+
+    st.markdown(f"## {topic['title']}")
+    if topic.get("subtitle"):
+        st.caption(topic["subtitle"])
+
+    if st.button("⬅️ Torna agli argomenti"):
+        st.session_state["selected_topic_id"] = None
+        st.rerun()
+
+    st.divider()
+
+    # embed PDF
+    st.markdown(
+        f"""
+        <iframe
+            src="{topic['pdf_url']}"
+            width="100%"
+            height="850px"
+            style="border:1px solid rgba(0,0,0,.08); border-radius:12px;">
+        </iframe>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.stop()
+
 
         # preview semplice (non cambia nulla del resto)
         st.info("Anteprima: visualizzo le prime 20 domande (modalità base).")
