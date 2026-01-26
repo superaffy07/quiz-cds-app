@@ -960,337 +960,311 @@ with tab_stud:
             st.session_state["menu_page"] = "home"
             st.rerun()
 
-    bank_count = fetch_bank_count()
-    st.write(f"📚 Domande in banca dati: **{bank_count}**")
-    st.divider()
-
     # =========================================================
-    # MENU DOPO LOGIN (NUOVO)
-    # =========================================================
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "home":
-        st.markdown("## Seleziona modalità")
-        st.caption("Scegli cosa vuoi fare oggi. La simulazione ha il timer; banca dati e caso pratico per ora sono in modalità base.")
+# APP
+# =========================================================
+bank_count = fetch_bank_count()
 
-        # layout a 3 card
-        st.markdown('<div class="menu-grid">', unsafe_allow_html=True)
+# ---------------------------------------------------------
+# LANDING WOW (MOSTRA SOLO SE NON LOGGATO)
+# ---------------------------------------------------------
+LANDING_CSS = """
+<style>
+/* Nascondo header Streamlit */
+header {visibility: hidden;}
 
-        st.markdown(
-            """
-            <div class="menu-card">
-              <div class="menu-chip">⏱️ Timer attivo</div>
-              <div class="menu-title">Simulazione Quiz (30 minuti)</div>
-              <div class="menu-desc">
-                30 domande estratte casualmente dalla banca dati. Alla fine vedi punteggio e correzione dettagliata.
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("➡️ Vai alla Simulazione"):
-                st.session_state["menu_page"] = "sim"
-                st.rerun()
+.block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
 
-        st.markdown(
-            """
-            <div class="menu-card">
-              <div class="menu-chip">📚 Studio libero</div>
-              <div class="menu-title">Banca dati</div>
-              <div class="menu-desc">
-                Modalità studio: sfoglia le domande e allenati senza timer. (In arrivo: filtri per argomento)
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with c2:
-            if st.button("➡️ Vai alla Banca dati"):
-                st.session_state["menu_page"] = "bank"
-                st.rerun()
+/* Sfondo WOW (blu/rosso stile lampeggianti) */
+.landing-bg{
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  padding: 34px 34px 28px 34px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 22px 60px rgba(0,0,0,.30);
+  background:
+    radial-gradient(1200px 500px at 20% 0%, rgba(59,130,246,.28), transparent 60%),
+    radial-gradient(900px 500px at 85% 10%, rgba(244,63,94,.22), transparent 55%),
+    linear-gradient(135deg, #071a33 0%, #0b2b52 48%, #1a0830 100%);
+}
 
-        st.markdown(
-            """
-            <div class="menu-card">
-              <div class="menu-chip">🧠 Allenamento</div>
-              <div class="menu-title">Caso pratico</div>
-              <div class="menu-desc">
-                Rispondi a uno scenario operativo. (In arrivo: correzione guidata e griglia di valutazione)
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with c3:
-            if st.button("➡️ Vai al Caso pratico"):
-                st.session_state["menu_page"] = "case"
-                st.rerun()
+/* Linea luci (blu/rosso) */
+.landing-bg:before{
+  content:"";
+  position:absolute;
+  left:-10%;
+  top:22px;
+  width:120%;
+  height:2px;
+  background: linear-gradient(90deg, rgba(59,130,246,0) 0%, rgba(59,130,246,.9) 35%, rgba(244,63,94,.9) 65%, rgba(244,63,94,0) 100%);
+  opacity:.95;
+}
 
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.stop()
+/* Badge */
+.landing-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.92);
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
 
-    # =========================================================
-    # =========================================================
-    # BANCA DATI (PDF materiali di studio) - NO TIMER
-    # =========================================================
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
-        st.markdown("## 📚 Banca dati")
-        st.caption("Materiali di studio consultabili (PDF).")
+/* Titoli */
+.landing-title{
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: .2px;
+  font-size: 44px;
+  line-height: 1.08;
+  margin: 0 0 10px 0;
+}
+.landing-sub{
+  color: rgba(255,255,255,.86);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 820px;
+  margin-bottom: 16px;
+}
+.landing-chips{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom: 18px;
+}
+.landing-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(0,0,0,.18);
+  color: rgba(255,255,255,.90);
+  font-weight: 800;
+  font-size: 13px;
+}
 
-        # Stato selezione documento
-        if "bank_doc" not in st.session_state:
-            st.session_state["bank_doc"] = None
+/* Card login */
+.login-card{
+  margin-top: 16px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 20px;
+  padding: 18px 18px 16px 18px;
+  backdrop-filter: blur(10px);
+}
+.login-title{
+  color:#fff;
+  font-size: 20px;
+  font-weight: 900;
+  margin: 0 0 10px 0;
+  text-align:center;
+}
+.login-hint{
+  color: rgba(255,255,255,.78);
+  font-size: 13px;
+  margin-top: 10px;
+  text-align:center;
+}
 
-        # Documenti disponibili
-        docs = [
-            {
-                "title": "LEGGE QUADRO (Legge 7 marzo 1986, n. 65)",
-                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/legge%20quadro%20completa.pdf",
-            },
-            {
-                "title": "CODICE DELLA STRADA (D.Lgs. 30 aprile 1992, n. 285)",
-                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/cds%20completo.pdf",
-            },
-        ]
+/* Input Streamlit “glass” */
+.landing-input [data-baseweb="input"] > div{
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.92) !important;
+}
+.landing-input input{
+  font-weight: 700 !important;
+}
 
-                # Lista argomenti (clic diretto -> apre PDF in nuova scheda)
-        st.markdown("### Seleziona un argomento (si apre in una nuova scheda)")
-        for d in docs:
-            st.link_button(f"📄 {d['title']}", d["url"], use_container_width=True)
+/* Bottone “Entra” gold */
+.landing-btn .stButton > button{
+  width: 100%;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  background: linear-gradient(180deg, #f7c777 0%, #e7a93d 100%) !important;
+  color: #1b1b1b !important;
+  font-weight: 900 !important;
+  box-shadow: 0 14px 30px rgba(231,169,61,.25) !important;
+}
+.landing-btn .stButton > button:hover{
+  transform: translateY(-1px);
+}
+</style>
+"""
 
-        st.stop()
+def render_landing_login(total_questions: int):
+    st.markdown(LANDING_CSS, unsafe_allow_html=True)
 
+    st.markdown('<div class="landing-bg">', unsafe_allow_html=True)
 
-    # =========================================================
-    # CASO PRATICO (placeholder, NO timer)
-    # =========================================================
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "case":
-        st.markdown("## 🧠 Caso pratico")
-        st.caption("Qui inseriremo casi pratici per argomento. Per ora è una versione base senza correzione automatica.")
+    # NB: qui metto "Corso PL 2026" come vuoi tu
+    st.markdown(
+        f"""
+        <div class="landing-badge">🚓 Corso PL 2026</div>
+        <div class="landing-title">Banca dati, simulazioni e quiz<br><span style="opacity:.92;">Polizia Locale</span></div>
+        <div class="landing-sub">
+          Piattaforma didattica a cura di <b>Raffaele Sotero</b> • Correzione finale dettagliata.<br>
+          Simulazioni d’esame, banca dati normativa e casi pratici commentati.
+        </div>
+        <div class="landing-chips">
+          <div class="landing-chip">📚 Banca dati: {total_questions} domande</div>
+          <div class="landing-chip">⏱️ 30 minuti</div>
+          <div class="landing-chip">✅ 1 punto per risposta esatta</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        st.markdown("### Scenario (demo)")
-        st.write(
-            "Durante un controllo, un conducente circola con documento di guida non esibito al momento del controllo e sostiene di averlo dimenticato a casa."
-        )
-        ans = st.text_area("Scrivi la tua risposta (sintetica ma completa):", height=140)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">Accesso corsista</div>', unsafe_allow_html=True)
 
-        colA, colB = st.columns([1, 3])
-        with colA:
-            if st.button("Salva risposta (demo)"):
-                st.success("Risposta salvata (demo). In arrivo: correzione automatica e griglia di valutazione.")
+    st.markdown('<div class="landing-input">', unsafe_allow_html=True)
+    full_name = st.text_input("Nome e Cognome (es. Mario Rossi)", key="landing_full_name")
+    course_pass = st.text_input("Password del corso", type="password", key="landing_course_pass")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        with colB:
-            st.info("Prossimo step: casi pratici reali + criteri di idoneità + feedback automatico.")
+    st.markdown('<div class="landing-btn">', unsafe_allow_html=True)
+    go = st.button("Entra", key="landing_enter")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        st.stop()
+    st.markdown(
+        '<div class="login-hint">Accesso riservato ai corsisti • Inserisci Nome e Cognome e la password del corso.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)  # login-card
+    st.markdown("</div>", unsafe_allow_html=True)  # landing-bg
 
-    # =========================================================
-    # SIMULAZIONE (timer SOLO QUI)
-    # =========================================================
-    if bank_count < N_QUESTIONS_DEFAULT:
-        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande per la simulazione. Ora: {bank_count}")
-        st.stop()
-
-    # ---------- START SIM (solo se menu_page == sim) ----------
-    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "sim":
-        st.markdown("### Simulazione (30 domande – 30 minuti)")
-        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer parte SOLO in questa modalità.")
-
-        if st.button("Inizia simulazione"):
-            try:
-                sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS_DEFAULT)
-                st.session_state["session_id"] = sess["id"]
-                st.session_state["in_progress"] = True
-                st.session_state["show_results"] = False
-                st.session_state["started_ts"] = time.time()
-                st.session_state["finished_ts"] = None
-                st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
-
-                all_q = fetch_all_bank_questions()
-                picked = random.sample(all_q, N_QUESTIONS_DEFAULT)
-                insert_session_questions(sess["id"], picked)
-
-                st.success("Simulazione avviata ✅")
-                st.rerun()
-            except Exception as e:
-                st.error("Errore avvio simulazione.")
-                st.exception(e)
-
-        st.stop()
-
-    # ---------- IN PROGRESS ----------
-    if st.session_state["in_progress"]:
-        session_id = st.session_state["session_id"]
-        rows = fetch_session_questions(session_id)
-
-        if not rows:
-            st.error("Sessione senza domande (quiz_answers vuota).")
+    # Login logic (uguale alla tua)
+    if go:
+        if not full_name or not course_pass:
+            st.error("Inserisci Nome e Cognome + Password.")
+            st.stop()
+        if course_pass != COURSE_PASSWORD:
+            st.error("Password errata. Riprova.")
             st.stop()
 
-        elapsed = int(time.time() - float(st.session_state["started_ts"]))
-        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
+        try:
+            st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
+            st.session_state["logged"] = True
+            st.session_state["menu_page"] = "home"
+            st.success("Accesso OK ✅")
+            st.rerun()
+        except Exception as e:
+            st.error("Errore accesso.")
+            st.exception(e)
+            st.stop()
 
-        # TIMER SUPER FLUIDO (NO RERUN)
-        end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
-        time_up = time.time() >= end_ts
-        render_live_timer(end_ts)
 
-        progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
-        st.progress(min(max(progress, 0.0), 1.0))
-        st.divider()
+# 1) Se NON loggato: mostra SOLO landing WOW e STOP
+if not st.session_state["logged"]:
+    render_landing_login(bank_count)
+    st.stop()
 
-        # controllo scadenza
-        if time.time() >= end_ts:
-            st.warning("Tempo scaduto! Correzione automatica…")
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = True
-            st.session_state["finished_ts"] = time.time()
-            finish_session(session_id)
+# 2) Se loggato: da qui in poi il tuo flusso normale (NIENTE doppioni)
+render_header(bank_count)
+
+tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
+
+
+# =========================================================
+# DOCENTE
+# =========================================================
+with tab_doc:
+    st.subheader("Carica banca dati (CSV)")
+    st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
+    st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
+
+    admin = st.text_input("Codice docente", type="password")
+    up = st.file_uploader("Carica CSV", type=["csv"])
+
+    st.divider()
+    st.write("Domande in banca dati:", fetch_bank_count())
+
+    if up and admin == ADMIN_CODE:
+        import pandas as pd
+        import io
+
+        raw = up.getvalue()
+        df = None
+        for enc in ("utf-8-sig", "utf-8", "latin1"):
+            try:
+                df = pd.read_csv(io.BytesIO(raw), encoding=enc)
+                break
+            except Exception:
+                df = None
+
+        if df is None:
+            st.error("Impossibile leggere il CSV. Salvalo come UTF-8.")
+            st.stop()
+
+        required = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
+        miss = [c for c in required if c not in df.columns]
+        if miss:
+            st.error(f"Mancano colonne: {miss}")
+            st.stop()
+
+        if "explanation" not in df.columns:
+            df["explanation"] = ""
+
+        df = df.fillna("")
+        df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
+        df["option_d"] = df["option_d"].astype(str).fillna("").str.strip()
+
+        bad = ~df["correct_option"].isin(["A", "B", "C", "D"])
+        if bad.any():
+            st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D).")
+            st.dataframe(df.loc[bad, ["question_text", "correct_option"]].head(10))
+            st.stop()
+
+        bad_d = (df["option_d"] == "") & (df["correct_option"] == "D")
+        if bad_d.any():
+            st.error("Righe con correct_option = D ma option_d vuota. Correggi il CSV.")
+            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
+            st.stop()
+
+        rows = df[required + ["explanation"]].to_dict(orient="records")
+
+        try:
+            sb.table("question_bank").insert(rows).execute()
+            st.success(f"Caricate {len(rows)} domande ✅")
+            st.rerun()
+        except Exception as e:
+            st.error("Errore inserimento in question_bank.")
+            st.exception(e)
+
+    elif up and admin != ADMIN_CODE:
+        st.warning("Codice docente errato.")
+
+
+# =========================================================
+# CORSISTA
+# =========================================================
+with tab_stud:
+    # DA QUI IN POI NON CAMBIO NULLA: è il tuo blocco già funzionante.
+    # (Il login vecchio NON serve più perché lo fa la landing sopra)
+
+    student = st.session_state["student"]
+    st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
+
+    col1, col2, col3 = st.columns([1, 1, 5])
+    with col1:
+        if st.button("🏠 Menu"):
+            st.session_state["menu_page"] = "home"
             st.rerun()
 
-        st.markdown("## 📝 Sessione in corso")
-
-        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
-        st.markdown(
-            f'<div class="badge">✅ <strong>Risposte date</strong>: {answered}/{len(rows)}</div>',
-            unsafe_allow_html=True
-        )
-
-        # Lettere "bold" compatibili con radio (no markdown)
-        BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
-
-        for idx, row in enumerate(rows, start=1):
-            st.markdown(
-                f"""
-                <div class="quiz-card">
-                  <div class="quiz-title">Domanda n°{idx} di {len(rows)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            st.markdown(f"**{row['question_text']}**")
-
-            options_map = {
-                "A": (row.get("option_a") or "").strip(),
-                "B": (row.get("option_b") or "").strip(),
-                "C": (row.get("option_c") or "").strip(),
-                "D": (row.get("option_d") or "").strip(),
-            }
-
-            letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
-            radio_options = ["—"] + letters
-
-            def fmt(opt: str) -> str:
-                if opt == "—":
-                    return "— (lascia senza risposta)"
-                return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
-
-            current = (row.get("chosen_option") or "").strip().upper()
-            if current not in letters:
-                current = "—"
-
-            choice = st.radio(
-                "Seleziona risposta",
-                options=radio_options,
-                index=radio_options.index(current),
-                format_func=fmt,
-                key=f"q_{row['id']}",
-                disabled=time_up,
-            )
-
-            new_val = None if choice == "—" else choice
-            old_val = (row.get("chosen_option") or None)
-
-            if (not time_up) and (new_val != old_val):
-                try:
-                    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
-                except Exception:
-                    pass
-
-            if new_val is None:
-                st.markdown(
-                    '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
-                    unsafe_allow_html=True,
-                )
-
-            st.divider()
-
-        st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
-        if st.button("Termina simulazione e vedi correzione"):
-            st.session_state["in_progress"] = False
-            st.session_state["show_results"] = True
-            st.session_state["finished_ts"] = time.time()
-            finish_session(session_id)
-            st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---------- RESULTS ----------
-    if st.session_state["show_results"]:
-        session_id = st.session_state["session_id"]
-        rows = fetch_session_questions(session_id)
-
-        score = 0
-        for row in rows:
-            chosen = (row.get("chosen_option") or "").strip().upper()
-            correct = (row.get("correct_option") or "").strip().upper()
-            if chosen and chosen == correct:
-                score += 1
-
-        start_ts = st.session_state.get("started_ts")
-        end_ts2 = st.session_state.get("finished_ts") or time.time()
-        elapsed_sec = int(max(0, float(end_ts2) - float(start_ts))) if start_ts else 0
-        em = elapsed_sec // 60
-        es = elapsed_sec % 60
-
-        st.markdown("## ✅ Correzione finale")
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
-        st.divider()
-
-        def letter_to_text(row: dict, letter: str) -> str:
-            letter = (letter or "").strip().upper()
-            if letter == "A":
-                return (row.get("option_a") or "").strip()
-            if letter == "B":
-                return (row.get("option_b") or "").strip()
-            if letter == "C":
-                return (row.get("option_c") or "").strip()
-            if letter == "D":
-                return (row.get("option_d") or "").strip()
-            return ""
-
-        for idx, row in enumerate(rows, start=1):
-            chosen = (row.get("chosen_option") or "").strip().upper()
-            correct = (row.get("correct_option") or "").strip().upper()
-
-            chosen_text = letter_to_text(row, chosen) if chosen else ""
-            correct_text = letter_to_text(row, correct)
-
-            ok = (chosen != "" and chosen == correct)
-
-            st.markdown(f"### Domanda n°{idx} {'✅' if ok else '❌'}")
-            st.markdown(f"**{row['question_text']}**")
-
-            if chosen:
-                st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
-            else:
-                st.write("**Tua risposta:** — (non risposta)")
-
-            st.write(f"**Corretta:** {correct}) {correct_text}")
-
-            if row.get("explanation"):
-                st.caption(row["explanation"])
-
-            st.divider()
-
-        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
-
-        if st.button("Torna al menu"):
+    with col2:
+        if st.button("Logout"):
+            st.session_state["logged"] = False
+            st.session_state["student"] = None
             st.session_state["session_id"] = None
             st.session_state["in_progress"] = False
             st.session_state["show_results"] = False
@@ -1300,9 +1274,15 @@ with tab_stud:
             st.session_state["menu_page"] = "home"
             st.rerun()
 
-# =========================================================
-# PADDING (non rimuovere nulla)
-# =========================================================
+    bank_count = fetch_bank_count()
+    st.write(f"📚 Domande in banca dati: **{bank_count}**")
+    st.divider()
+
+    # =========================================================
+    # QUI SOTTO CI INCOLLI IL TUO BLOCCO CORSISTA ESISTENTE
+    # (menu_page, bank, case, sim, risultati)
+    # =========================================================
+
 # padding
 # padding
 # padding
