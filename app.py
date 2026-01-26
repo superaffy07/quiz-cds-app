@@ -83,7 +83,7 @@ CUSTOM_CSS = """
   border: 1px solid rgba(0,0,0,.08) !important;
 }
 
-/* buttons (base) */
+/* buttons */
 .stButton > button {
   border-radius: 12px;
   padding: 10px 14px;
@@ -98,7 +98,7 @@ CUSTOM_CSS = """
   background: #f9fafb;
 }
 
-/* RADIO / INPUTS */
+/* radio / inputs */
 div[data-baseweb="input"] > div { border-radius: 12px !important; }
 .stRadio label { color: #111827; }
 
@@ -112,7 +112,7 @@ div[data-testid="stAlert"] {
 hr { border-top: 1px solid rgba(0,0,0,.08); }
 
 /* =========================================
-   QUIZ CARD LOOK (solo estetica, logica invariata)
+   QUIZ CARD LOOK
    ========================================= */
 .quiz-card{
   background: white;
@@ -142,7 +142,6 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
 
 /* =========================================
    BOTTONE ROSSO SOLO PER "TERMINA"
-   (usiamo classi CSS attaccate al container)
    ========================================= */
 .end-btn-wrap .stButton > button{
   background: #b42318 !important;
@@ -154,6 +153,7 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
   background: #9b1c14 !important;
   transform: translateY(-1px);
 }
+
 /* === Stato risposta (pill verde/gialla) === */
 .status-pill{
   padding: 10px 12px;
@@ -168,7 +168,6 @@ hr { border-top: 1px solid rgba(0,0,0,.08); }
 .status-pill.warn{
   background: rgba(245,158,11,0.14);
 }
-
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -564,9 +563,12 @@ with tab_stud:
             st.rerun()
 
         st.markdown("## 📝 Sessione in corso")
-        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
-        st.markdown(f"**Risposte date:** {answered}/{len(rows)}")
 
+        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
+        st.markdown(
+            f'<div class="badge">✅ <strong>Risposte date</strong>: {answered}/{len(rows)}</div>',
+            unsafe_allow_html=True
+        )
 
         # Lettere "bold" compatibili con radio (no markdown)
         BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
@@ -576,7 +578,7 @@ with tab_stud:
             st.markdown(
                 f"""
                 <div class="quiz-card">
-                  <div class="quiz-title">Domanda n°{idx}</div>
+                  <div class="quiz-title">Domanda n°{idx} di {len(rows)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -608,15 +610,15 @@ with tab_stud:
             if current not in letters:
                 current = "—"
 
-choice = st.radio(
-    "Seleziona risposta",
-    options=radio_options,
-    index=radio_options.index(current),
-    format_func=fmt,
-    key=f"q_{row['id']}",
-    disabled=time_up,
-)
-
+            # --- RADIO + SALVATAGGIO + STATO (FIX INDENTAZIONE) ---
+            choice = st.radio(
+                "Seleziona risposta",
+                options=radio_options,
+                index=radio_options.index(current),
+                format_func=fmt,
+                key=f"q_{row['id']}",
+                disabled=time_up,
+            )
 
             # salva (— = None)
             new_val = None if choice == "—" else choice
@@ -627,18 +629,18 @@ choice = st.radio(
                     update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
                 except Exception:
                     pass
-                    # Stato risposta selezionata (pill professionale)
-if new_val is None:
-    st.markdown(
-        '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
-        unsafe_allow_html=True,
-    )
 
+            # Stato risposta selezionata (pill professionale)
+            if new_val is None:
+                st.markdown(
+                    '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
+                    unsafe_allow_html=True,
+                )
 
             st.divider()
 
