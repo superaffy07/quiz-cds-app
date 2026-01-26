@@ -664,9 +664,8 @@ with tab_stud:
         resp = requests.get(d["url"], timeout=30)
         resp.raise_for_status()
         pdf_bytes = resp.content
-
-st.download_button(
-    "⬇️ Scarica PDF",
+        st.download_button(
+           "⬇️ Scarica PDF",
     data=pdf_bytes,
     file_name=d["title"].replace(" ", "_") + ".pdf",
     mime="application/pdf",
