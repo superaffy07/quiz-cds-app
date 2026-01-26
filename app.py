@@ -178,7 +178,7 @@ if "duration_seconds" not in st.session_state:
 # =========================
 # UI
 # =========================
-st.title("🚓 Allenamento Quiz CDS")
+st.title("🚓 ESERCITAZIONE CORSO POLIZIA LOCALE")
 st.caption("Simulazione 30 domande / 30 minuti. Correzione alla fine. Tutto salvato su Supabase.")
 
 tab_stud, tab_doc = st.tabs(["🎓 Studente", "🛠️ Docente (info)"])
