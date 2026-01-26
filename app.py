@@ -76,30 +76,26 @@ def fetch_all_bank_questions() -> list[dict]:
 
 
 def insert_session_questions(session_id: str, questions: list[dict]) -> None:
-    # Salviamo le domande estratte nella tabella quiz_answers
+    # Salviamo le domande estratte nella tabella quiz_answers (snapshot della sessione)
     rows = []
-
     for q in questions:
-        option_a = (q.get("option_a") or "").strip()
-        option_b = (q.get("option_b") or "").strip()
-        option_c = (q.get("option_c") or "").strip()
-        option_d = (q.get("option_d") or "").strip()  # 👈 FIX CRITICO
-
-        rows.append({
-            "session_id": session_id,
-            "topic_id": None,
-            "question_text": q.get("question_text", "").strip(),
-            "option_a": option_a,
-            "option_b": option_b,
-            "option_c": option_c,
-            "option_d": option_d,          # MAI NULL
-            "correct_option": q.get("correct_option"),
-            "chosen_option": None,
-            "explanation": q.get("explanation", "")
-        })
-
+        rows.append(
+            {
+                "session_id": session_id,
+                "topic_id": None,
+                "question_text": (q.get("question_text") or "").strip(),
+                "option_a": (q.get("option_a") or "").strip(),
+                "option_b": (q.get("option_b") or "").strip(),
+                "option_c": (q.get("option_c") or "").strip(),
+                "option_d": (q.get("option_d") or "").strip(),   # <-- mai NULL
+                "correct_option": (q.get("correct_option") or "").strip().upper(),
+                "chosen_option": None,
+                "explanation": (q.get("explanation") or "").strip(),
+            }
+        )
     if rows:
         sb.table("quiz_answers").insert(rows).execute()
+
 
 
 
