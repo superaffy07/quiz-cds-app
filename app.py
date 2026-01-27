@@ -310,7 +310,7 @@ def ss_init():
 ss_init()
 
 # =========================================================
-# THEME / UI — Stile "super professionale"
+# THEME / UI — Base (resto app)
 # =========================================================
 BG_DATA_URL = load_local_background_base64()
 BG_CSS = f'url("{BG_DATA_URL}")' if BG_DATA_URL else "none"
@@ -324,10 +324,8 @@ CUSTOM_CSS = f"""
   --bg1: #0B1220;
   --text: rgba(255,255,255,.92);
   --muted: rgba(255,255,255,.72);
-
   --gold: #E6B25A;
   --gold2:#F2C76D;
-
   --shadow: 0 22px 60px rgba(0,0,0,.40);
 }}
 
@@ -660,25 +658,24 @@ def render_landing_login() -> tuple[str, str, bool]:
     if not hero_bg_url:
         hero_bg_url = DEFAULT_HERO_BG_URL
 
-    car_svg = """
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-     xmlns="http://www.w3.org/2000/svg" style="opacity:.95;">
-  <path d="M5.6 11.2L7.1 7.6C7.4 6.9 8.1 6.5 8.9 6.5H15.1C15.9 6.5 16.6 6.9 16.9 7.6L18.4 11.2"
-        stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M6.3 16.8H5.4C4.6 16.8 4 16.2 4 15.4V12.8C4 12 4.6 11.4 5.4 11.4H18.6C19.4 11.4 20 12 20 12.8V15.4C20 16.2 19.4 16.8 18.6 16.8H17.7"
-        stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M7.3 16.8V18.2" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M16.7 16.8V18.2" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M8 14.3H9.6" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M14.4 14.3H16" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
-</svg>
-"""
+    car_svg = (
+        "<svg width='18' height='18' viewBox='0 0 24 24' fill='none' "
+        "xmlns='http://www.w3.org/2000/svg' style='opacity:.95;'>"
+        "<path d='M5.6 11.2L7.1 7.6C7.4 6.9 8.1 6.5 8.9 6.5H15.1C15.9 6.5 16.6 6.9 16.9 7.6L18.4 11.2' "
+        "stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/>"
+        "<path d='M6.3 16.8H5.4C4.6 16.8 4 16.2 4 15.4V12.8C4 12 4.6 11.4 5.4 11.4H18.6C19.4 11.4 20 12 20 12.8V15.4C20 16.2 19.4 16.8 18.6 16.8H17.7' "
+        "stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/>"
+        "<path d='M7.3 16.8V18.2' stroke='white' stroke-width='1.6' stroke-linecap='round'/>"
+        "<path d='M16.7 16.8V18.2' stroke='white' stroke-width='1.6' stroke-linecap='round'/>"
+        "<path d='M8 14.3H9.6' stroke='white' stroke-width='1.6' stroke-linecap='round'/>"
+        "<path d='M14.4 14.3H16' stroke='white' stroke-width='1.6' stroke-linecap='round'/>"
+        "</svg>"
+    )
 
     st.markdown(
         f"""
 <style>
 /* ===== LANDING (SCREENSHOT LOOK) ===== */
-
 .landing-canvas {{
   position: relative;
   width: 100%;
@@ -688,7 +685,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   border: 1px solid rgba(255,255,255,.10);
   box-shadow: 0 30px 90px rgba(0,0,0,.55);
 }}
-
 .landing-bg {{
   position:absolute;
   inset:0;
@@ -698,14 +694,12 @@ def render_landing_login() -> tuple[str, str, bool]:
   transform: scale(1.06);
   filter: saturate(1.05) contrast(1.08);
 }}
-
 .landing-dim {{
   position:absolute;
   inset:0;
   background: radial-gradient(1100px 700px at 50% 0%, rgba(0,0,0,.35), rgba(0,0,0,.70));
   backdrop-filter: blur(10px);
 }}
-
 .landing-sirens {{
   position:absolute;
   inset:-45% -25%;
@@ -732,7 +726,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   top: 8%;
   background: radial-gradient(circle, rgba(255,80,120,.60), transparent 62%);
 }}
-
 .landing-grain {{
   position:absolute;
   inset:0;
@@ -741,7 +734,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }}
-
 .landing-hero {{
   position: relative;
   z-index: 2;
@@ -754,7 +746,6 @@ def render_landing_login() -> tuple[str, str, bool]:
 @media (max-width: 980px) {{
   .landing-hero {{ padding-top: 34px; }}
 }}
-
 .landing-pill {{
   display:inline-flex;
   align-items:center;
@@ -769,15 +760,8 @@ def render_landing_login() -> tuple[str, str, bool]:
   font-weight: 900;
   letter-spacing: .3px;
 }}
-.landing-pill .dot {{
-  opacity:.55;
-}}
-.landing-pill .car {{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-}}
-
+.landing-pill .dot {{ opacity:.55; }}
+.landing-pill .car {{ display:inline-flex; align-items:center; justify-content:center; }}
 .landing-title {{
   margin: 22px 0 10px;
   font-family: Oswald, Inter, sans-serif;
@@ -789,7 +773,6 @@ def render_landing_login() -> tuple[str, str, bool]:
 @media (max-width: 980px) {{
   .landing-title {{ font-size: 44px; }}
 }}
-
 .landing-locale {{
   margin: 0 0 14px;
   font-family: Oswald, Inter, sans-serif;
@@ -797,7 +780,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   letter-spacing: .2px;
   color: rgba(255,255,255,.88);
 }}
-
 .landing-subtitle {{
   margin: 0 0 10px;
   font-size: 18px;
@@ -809,7 +791,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   font-weight: 800;
   color: rgba(255,255,255,.84);
 }}
-
 .landing-shortcuts {{
   margin-top: 16px;
   display:flex;
@@ -826,13 +807,11 @@ def render_landing_login() -> tuple[str, str, bool]:
   color: rgba(255,255,255,.90);
   font-weight: 900;
 }}
-
 .login-wrap {{
   position: relative;
   z-index: 3;
   margin-top: 26px;
 }}
-
 .login-card {{
   background: rgba(255,255,255,.14);
   border: 1px solid rgba(255,255,255,.18);
@@ -841,9 +820,7 @@ def render_landing_login() -> tuple[str, str, bool]:
   backdrop-filter: blur(22px);
   overflow: hidden;
 }}
-.login-card-inner {{
-  padding: 22px 22px 16px;
-}}
+.login-card-inner {{ padding: 22px 22px 16px; }}
 .login-title {{
   margin: 0;
   font-family: Oswald, Inter, sans-serif;
@@ -851,7 +828,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   color: rgba(255,255,255,.92);
   text-align: center;
 }}
-
 .icon-badge {{
   width: 44px;
   height: 44px;
@@ -864,7 +840,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   backdrop-filter: blur(12px);
   font-size: 18px;
 }}
-
 /* style inputs inside landing */
 .landing-scope div[data-baseweb="input"] > div {{
   border-radius: 14px !important;
@@ -877,7 +852,6 @@ def render_landing_login() -> tuple[str, str, bool]:
 .landing-scope div[data-baseweb="base-input"] input::placeholder {{
   color: rgba(255,255,255,.55) !important;
 }}
-
 .landing-scope .primary-gold .stButton > button {{
   width: 100%;
   padding: 16px 18px !important;
@@ -892,7 +866,6 @@ def render_landing_login() -> tuple[str, str, bool]:
 .landing-scope .primary-gold .stButton > button:hover {{
   background: linear-gradient(180deg, #FFE2A5, #F2C76D) !important;
 }}
-
 .login-foot {{
   margin: 14px 0 6px;
   text-align: center;
@@ -991,7 +964,7 @@ def render_landing_login() -> tuple[str, str, bool]:
 # =========================================================
 bank_count = fetch_bank_count()
 
-# Mostra l'header "normale" solo dopo login (evita duplicazioni sulla landing)
+# Header "normale" solo dopo login (evita duplicazioni sulla landing)
 if st.session_state.get("logged"):
     render_top_hero(bank_count)
 
