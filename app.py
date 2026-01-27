@@ -665,6 +665,7 @@ def render_top_hero(bank_count: int):
     )
 
 
+# ... existing code ...
 def render_landing_login() -> tuple[str, str, bool]:
     """
     Landing page iniziale (solo quando NON loggato) stile screenshot:
@@ -999,6 +1000,7 @@ def render_landing_login() -> tuple[str, str, bool]:
         )
 
     return full_name, course_pass, clicked
+# ... existing code ...
 
 
 # =========================================================
