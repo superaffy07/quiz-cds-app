@@ -419,7 +419,7 @@ def render_header(total_questions: int):
 # APP
 # =========================================================
 bank_count = fetch_bank_count()
-render_header(bank_count)
+# render_header(bank_count)
 # ===============================
 # HERO / LANDING PAGE
 # ===============================
