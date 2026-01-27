@@ -23,6 +23,41 @@ st.set_page_config(
 # STILI (NO BLU, MODERNO, LEGGIBILE)
 # =========================================================
 CUSTOM_CSS = """
+st.markdown("""
+<style>
+/* === CENTRA LOGIN === */
+.login-wrapper {
+    max-width: 420px;
+    margin: 0 auto;
+    margin-top: 20px;
+}
+
+/* === INPUT PIÙ COMPATTI === */
+.login-wrapper input {
+    height: 42px !important;
+    font-size: 15px !important;
+}
+
+/* === LABEL PIÙ COMPATTE === */
+.login-wrapper label {
+    margin-bottom: 4px !important;
+    font-size: 14px;
+}
+
+/* === BOTTONE ENTRA === */
+.login-wrapper button {
+    height: 46px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* === RIDUCE SPAZI STREAMLIT === */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0.6rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 <style>
 /* layout */
 .block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
