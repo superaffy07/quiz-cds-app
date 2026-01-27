@@ -667,8 +667,8 @@ def render_top_hero(bank_count: int):
 
 def render_landing_login() -> tuple[str, str, bool]:
     """
-    Landing page iniziale (solo quando NON loggato) stile immagine:
-    hero full background + sirene + card login glass centrata.
+    Landing page iniziale (solo quando NON loggato) stile screenshot:
+    hero centrato + pill + titolo + shortcuts + card login glass con icone.
     Ritorna: (full_name, course_pass, clicked)
     """
     DEFAULT_HERO_BG_URL = (
@@ -676,169 +676,217 @@ def render_landing_login() -> tuple[str, str, bool]:
         "a2259150bd4cd99d07966de4c35d9fafc04fab13/"
         "ChatGPT%20Image%2027%20gen%202026%2C%2000_56_50.png"
     )
-
     try:
         hero_bg_url = (st.secrets.get("HERO_BG_URL", "") or "").strip()
     except Exception:
         hero_bg_url = ""
-
     if not hero_bg_url:
         hero_bg_url = DEFAULT_HERO_BG_URL
 
     st.markdown(
         f"""
 <style>
-/* ===== LANDING ONLY ===== */
-.landing-wrap {{
+/* ===== LANDING (LOOK LIKE SCREENSHOT) ===== */
+
+/* full-bleed canvas */
+.landing-canvas {{
   position: relative;
   width: 100%;
-  min-height: calc(100vh - 120px);
-  border-radius: 22px;
+  min-height: calc(100vh - 90px);
+  border-radius: 26px;
   overflow: hidden;
-  box-shadow: 0 26px 70px rgba(0,0,0,.45);
   border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 30px 90px rgba(0,0,0,.55);
 }}
+
+/* background image + dark overlay */
 .landing-bg {{
   position:absolute;
   inset:0;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.68) 72%, rgba(0,0,0,.72) 100%),
-    url("{hero_bg_url}");
+  background: url("{hero_bg_url}");
   background-size: cover;
   background-position: center;
-  transform: scale(1.03);
-  filter: saturate(1.02) contrast(1.04);
+  transform: scale(1.06);
+  filter: saturate(1.05) contrast(1.08);
 }}
-.landing-overlay {{
+.landing-dim {{
   position:absolute;
   inset:0;
+  background: radial-gradient(1100px 700px at 50% 0%, rgba(0,0,0,.35), rgba(0,0,0,.70));
   backdrop-filter: blur(10px);
-  background: rgba(0,0,0,.22);
 }}
-.siren {{
+
+/* siren glow */
+.landing-sirens {{
   position:absolute;
-  inset:-35% -20%;
+  inset:-45% -25%;
   pointer-events:none;
   mix-blend-mode: screen;
-  opacity: .92;
+  opacity: .95;
   filter: blur(2px);
 }}
-.siren:before, .siren:after {{
+.landing-sirens:before,
+.landing-sirens:after {{
   content:"";
   position:absolute;
-  width: 62%;
-  height: 62%;
+  width: 58%;
+  height: 58%;
   border-radius: 999px;
 }}
-.siren:before {{
-  left: -12%;
+.landing-sirens:before {{
+  left: -8%;
   top: 8%;
-  background: radial-gradient(circle, rgba(26,92,255,.60), transparent 62%);
+  background: radial-gradient(circle, rgba(45,115,255,.65), transparent 62%);
 }}
-.siren:after {{
-  right: -12%;
+.landing-sirens:after {{
+  right: -8%;
   top: 8%;
-  background: radial-gradient(circle, rgba(255,45,85,.60), transparent 62%);
+  background: radial-gradient(circle, rgba(255,80,120,.60), transparent 62%);
 }}
-.landing-content {{
+
+/* subtle film grain */
+.landing-grain {{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity: .12;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}}
+
+/* top hero text area centered */
+.landing-hero {{
   position: relative;
   z-index: 2;
-  padding: 46px 36px 40px;
+  padding: 48px 18px 18px;
+  display:flex;
+  flex-direction: column;
+  align-items:center;
+  text-align:center;
 }}
-@media (max-width: 980px){{
-  .landing-content {{ padding: 28px 16px 28px; }}
+@media (max-width: 980px) {{
+  .landing-hero {{ padding-top: 34px; }}
 }}
-.landing-top-pill {{
+
+.landing-pill {{
   display:inline-flex;
   align-items:center;
-  gap:10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 11px 18px;
   border-radius: 999px;
   background: rgba(255,255,255,.10);
   border: 1px solid rgba(255,255,255,.16);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 10px 28px rgba(0,0,0,.28);
-  font-weight: 800;
-  letter-spacing: .3px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 34px rgba(0,0,0,.25);
   color: rgba(255,255,255,.92);
+  font-weight: 900;
+  letter-spacing: .3px;
 }}
+.landing-pill .dot {{
+  opacity:.55;
+}}
+
 .landing-title {{
-  margin: 18px 0 6px 0;
+  margin: 22px 0 10px;
   font-family: Oswald, Inter, sans-serif;
-  font-size: 56px;
+  font-size: 62px;
   line-height: 1.02;
-  color: rgba(255,255,255,.94);
-  text-shadow: 0 14px 40px rgba(0,0,0,.45);
+  color: rgba(255,255,255,.95);
+  text-shadow: 0 18px 60px rgba(0,0,0,.45);
 }}
-.landing-kicker {{
-  margin: 0 0 10px 0;
-  font-family: Oswald, Inter, sans-serif;
-  font-size: 28px;
-  letter-spacing: .2px;
-  color: rgba(255,255,255,.88);
+@media (max-width: 980px) {{
+  .landing-title {{ font-size: 44px; }}
 }}
-.landing-sub {{
-  margin: 0;
+
+.landing-subtitle {{
+  margin: 0 0 10px;
+  font-size: 18px;
   color: rgba(255,255,255,.78);
+}}
+.landing-bullet {{
+  margin: 0;
   font-size: 16px;
-  line-height: 1.55;
-}}
-.landing-bul {{
-  margin: 10px 0 0 0;
-  color: rgba(255,255,255,.82);
   font-weight: 800;
+  color: rgba(255,255,255,.84);
 }}
-.shortcut-row {{
+
+/* shortcuts pills row */
+.landing-shortcuts {{
   margin-top: 16px;
   display:flex;
-  gap:10px;
+  gap: 14px;
   flex-wrap: wrap;
+  justify-content: center;
 }}
-.shortcut-pill {{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding: 9px 12px;
+.shortcut {{
+  padding: 11px 18px;
   border-radius: 999px;
-  background: rgba(255,255,255,.10);
-  border: 1px solid rgba(255,255,255,.16);
-  backdrop-filter: blur(12px);
-  font-weight: 900;
-  font-size: 12px;
-  color: rgba(255,255,255,.90);
-}}
-.login-glass {{
-  background: rgba(255,255,255,.10);
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 22px;
-  box-shadow: 0 26px 70px rgba(0,0,0,.38);
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(16px);
-  overflow:hidden;
+  color: rgba(255,255,255,.90);
+  font-weight: 900;
 }}
-.login-glass-inner {{
-  padding: 18px 18px 16px;
+
+/* login glass card */
+.login-wrap {{
+  position: relative;
+  z-index: 3;
+  margin-top: 26px;
 }}
-.login-h {{
+
+.login-card {{
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 26px;
+  box-shadow: 0 28px 80px rgba(0,0,0,.40);
+  backdrop-filter: blur(22px);
+  overflow: hidden;
+}}
+
+.login-card-inner {{
+  padding: 22px 22px 16px;
+}}
+
+.login-title {{
+  margin: 0;
   font-family: Oswald, Inter, sans-serif;
-  font-size: 30px;
-  margin: 0 0 6px 0;
-  color: rgba(255,255,255,.94);
+  font-size: 32px;
+  color: rgba(255,255,255,.92);
+  text-align: center;
 }}
-.login-p {{
-  margin: 0 0 14px 0;
-  color: rgba(255,255,255,.72);
-  line-height: 1.45;
-}}
-.login-foot {{
-  margin-top: 10px;
+
+.login-help {{
+  margin: 10px 0 14px;
   color: rgba(255,255,255,.70);
-  font-size: 12.5px;
-  line-height: 1.35;
+  text-align: center;
 }}
-/* Rafforzo stile input/bottone solo su landing */
+
+.field-row {{
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  margin-top: 10px;
+}}
+
+.icon-badge {{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(12px);
+  font-size: 18px;
+}}
+
+/* style inputs inside landing */
 .landing-scope div[data-baseweb="input"] > div {{
-  background: rgba(255,255,255,.12) !important;
-  border: 1px solid rgba(255,255,255,.18) !important;
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.10) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
 }}
 .landing-scope div[data-baseweb="base-input"] input {{
   color: rgba(255,255,255,.92) !important;
@@ -846,36 +894,49 @@ def render_landing_login() -> tuple[str, str, bool]:
 .landing-scope div[data-baseweb="base-input"] input::placeholder {{
   color: rgba(255,255,255,.55) !important;
 }}
+
 .landing-scope .primary-gold .stButton > button {{
   width: 100%;
-  background: linear-gradient(180deg, #F2C76D, #E6B25A) !important;
-  color: #1b1b1b !important;
-  border: 1px solid rgba(0,0,0,.12) !important;
-  box-shadow: 0 14px 30px rgba(230,178,90,.28) !important;
-  padding: 14px 16px !important;
-  font-size: 16px !important;
+  padding: 16px 18px !important;
   border-radius: 14px !important;
+  font-size: 18px !important;
+  font-weight: 1000 !important;
+  background: linear-gradient(180deg, #F6D48E, #E6B25A) !important;
+  color: #1b1b1b !important;
+  border: 1px solid rgba(0,0,0,.14) !important;
+  box-shadow: 0 18px 44px rgba(230,178,90,.28) !important;
 }}
 .landing-scope .primary-gold .stButton > button:hover {{
-  background: linear-gradient(180deg, #FFD98B, #F2C76D) !important;
+  background: linear-gradient(180deg, #FFE2A5, #F2C76D) !important;
+}}
+
+.login-foot {{
+  margin: 14px 0 6px;
+  text-align: center;
+  color: rgba(255,255,255,.72);
+  font-size: 13px;
+  line-height: 1.35;
 }}
 </style>
 
-<div class="landing-wrap landing-scope">
+<div class="landing-canvas landing-scope">
   <div class="landing-bg"></div>
-  <div class="landing-overlay"></div>
-  <div class="siren"></div>
+  <div class="landing-dim"></div>
+  <div class="landing-sirens"></div>
+  <div class="landing-grain"></div>
 
-  <div class="landing-content">
-    <div class="landing-top-pill">🚓 PLATFORM <span style="opacity:.55;">•</span> CORSO PL 2026</div>
+  <div class="landing-hero">
+    <div class="landing-pill">🚓 <span>PLATFORM</span> <span class="dot">•</span> <span>CORSO PL 2026</span></div>
+
     <div class="landing-title">Banca dati, simulazioni e quiz</div>
-    <div class="landing-kicker">Polizia Locale</div>
-    <p class="landing-sub">Piattaforma didattica a cura di <b>Raffaele Sotero</b></p>
-    <p class="landing-bul">• Correzione finale dettagliata</p>
-    <div class="shortcut-row">
-      <div class="shortcut-pill">Casi pratici</div>
-      <div class="shortcut-pill">Quiz</div>
-      <div class="shortcut-pill">Banca dati</div>
+
+    <div class="landing-subtitle">Piattaforma didattica a cura di <b>Raffaele Sotero</b></div>
+    <div class="landing-bullet">• Correzione finale dettagliata</div>
+
+    <div class="landing-shortcuts">
+      <div class="shortcut">Casi pratici</div>
+      <div class="shortcut">Quiz</div>
+      <div class="shortcut">Banca dati</div>
     </div>
   </div>
 </div>
@@ -883,14 +944,17 @@ def render_landing_login() -> tuple[str, str, bool]:
         unsafe_allow_html=True,
     )
 
-    left, mid, right = st.columns([1.15, 1.0, 1.15])
+    # card centrata (come screenshot)
+    left, mid, right = st.columns([1.2, 1.0, 1.2])
     with mid:
         st.markdown(
             """
-            <div class="login-glass">
-              <div class="login-glass-inner">
-                <div class="login-h">Accesso corsista</div>
-                <div class="login-p">Inserisci Nome e Cognome e la password del corso.</div>
+            <div class="login-wrap">
+              <div class="login-card">
+                <div class="login-card-inner">
+                  <div class="login-title">Accesso corsista</div>
+                  <div class="login-help">Inserisci Nome e Cognome (es. Mario Rossi)</div>
+                </div>
               </div>
             </div>
             """,
@@ -898,8 +962,29 @@ def render_landing_login() -> tuple[str, str, bool]:
         )
 
         with st.form("landing_login_form", clear_on_submit=False):
-            full_name = st.text_input("Nome e Cognome", placeholder="Nome e Cognome (es. Mario Rossi)")
-            course_pass = st.text_input("Password del corso", type="password", placeholder="Password del corso")
+            # Riga 1: icona + input
+            c1, c2 = st.columns([0.18, 0.82], vertical_alignment="center")
+            with c1:
+                st.markdown('<div class="icon-badge">👤</div>', unsafe_allow_html=True)
+            with c2:
+                full_name = st.text_input(
+                    "Nome e Cognome",
+                    placeholder="Nome e Cognome (es. Mario Rossi)",
+                    label_visibility="collapsed",
+                )
+
+            # Riga 2: icona + input
+            c3, c4 = st.columns([0.18, 0.82], vertical_alignment="center")
+            with c3:
+                st.markdown('<div class="icon-badge">🔒</div>', unsafe_allow_html=True)
+            with c4:
+                course_pass = st.text_input(
+                    "Password del corso",
+                    type="password",
+                    placeholder="Password del corso",
+                    label_visibility="collapsed",
+                )
+
             st.markdown('<div class="primary-gold">', unsafe_allow_html=True)
             clicked = st.form_submit_button("Entra")
             st.markdown("</div>", unsafe_allow_html=True)
