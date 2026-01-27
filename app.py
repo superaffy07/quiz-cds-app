@@ -49,7 +49,8 @@ st.set_page_config(
 N_QUESTIONS_DEFAULT = 30
 DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
 
-COURSE_PASSWORD = "polizia2026"
+# SOSTITUISCI TU con la tua password reale
+COURSE_PASSWORD = "<COURSE_PASSWORD>"
 COURSE_CLASS_CODE = "CORSO_PL_2026"
 
 # =========================================================
@@ -233,6 +234,7 @@ def update_chosen_option(row_id: int, session_id: str, chosen_letter: Optional[s
 # =========================================================
 REQUIRED_COLUMNS = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
 
+
 def parse_csv_questions(raw_bytes: bytes) -> List[Dict]:
     """
     Legge CSV da bytes con encoding robusto. Non richiede pandas.
@@ -304,10 +306,11 @@ def ss_init():
         if k not in st.session_state:
             st.session_state[k] = v
 
+
 ss_init()
 
 # =========================================================
-# THEME / UI — Stile "super professionale" (come immagine)
+# THEME / UI — Stile "super professionale"
 # =========================================================
 BG_DATA_URL = load_local_background_base64()
 BG_CSS = f'url("{BG_DATA_URL}")' if BG_DATA_URL else "none"
@@ -322,15 +325,8 @@ CUSTOM_CSS = f"""
   --text: rgba(255,255,255,.92);
   --muted: rgba(255,255,255,.72);
 
-  --glass: rgba(255,255,255,.10);
-  --glass2: rgba(255,255,255,.14);
-  --stroke: rgba(255,255,255,.16);
-
   --gold: #E6B25A;
   --gold2:#F2C76D;
-  --navy: #0B1D2B;
-  --blue: #1A5CFF;
-  --red: #FF2D55;
 
   --shadow: 0 22px 60px rgba(0,0,0,.40);
 }}
@@ -391,7 +387,7 @@ a {{
 }}
 
 .hero-sub {{
-  color: var(--muted);
+  color: rgba(255,255,255,.72);
   font-size: 16px;
   line-height: 1.55;
   max-width: 760px;
@@ -414,20 +410,9 @@ a {{
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.14);
   backdrop-filter: blur(10px);
-  color: var(--text);
+  color: rgba(255,255,255,.92);
   font-weight: 700;
   font-size: 12px;
-}}
-
-.login-shell {{
-  margin-top: 22px;
-  display: grid;
-  grid-template-columns: 1.1fr .9fr;
-  gap: 18px;
-  align-items: stretch;
-}}
-@media (max-width: 980px){{
-  .login-shell {{ grid-template-columns: 1fr; }}
 }}
 
 .glass-card {{
@@ -438,16 +423,6 @@ a {{
   backdrop-filter: blur(14px);
   overflow: hidden;
   position: relative;
-}}
-
-.glass-card:before {{
-  content:"";
-  position:absolute;
-  inset: 0;
-  background:
-    radial-gradient(500px 200px at 18% 10%, rgba(26,92,255,.18), transparent 60%),
-    radial-gradient(500px 200px at 82% 10%, rgba(255,45,85,.18), transparent 62%);
-  pointer-events: none;
 }}
 
 .card-pad {{
@@ -464,7 +439,7 @@ a {{
 
 .card-sub {{
   margin: 0 0 14px 0;
-  color: var(--muted);
+  color: rgba(255,255,255,.72);
   line-height: 1.45;
 }}
 
@@ -665,11 +640,10 @@ def render_top_hero(bank_count: int):
     )
 
 
-# ... existing code ...
 def render_landing_login() -> tuple[str, str, bool]:
     """
-    Landing page iniziale (solo quando NON loggato) stile screenshot:
-    hero centrato + pill + titolo + shortcuts + card login glass con icone.
+    Landing page (solo quando NON loggato) stile screenshot:
+    badge con icona auto + titolo + "Polizia Locale" + card login glass con icone.
     Ritorna: (full_name, course_pass, clicked)
     """
     DEFAULT_HERO_BG_URL = (
@@ -677,19 +651,34 @@ def render_landing_login() -> tuple[str, str, bool]:
         "a2259150bd4cd99d07966de4c35d9fafc04fab13/"
         "ChatGPT%20Image%2027%20gen%202026%2C%2000_56_50.png"
     )
+
     try:
         hero_bg_url = (st.secrets.get("HERO_BG_URL", "") or "").strip()
     except Exception:
         hero_bg_url = ""
+
     if not hero_bg_url:
         hero_bg_url = DEFAULT_HERO_BG_URL
+
+    car_svg = """
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+     xmlns="http://www.w3.org/2000/svg" style="opacity:.95;">
+  <path d="M5.6 11.2L7.1 7.6C7.4 6.9 8.1 6.5 8.9 6.5H15.1C15.9 6.5 16.6 6.9 16.9 7.6L18.4 11.2"
+        stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6.3 16.8H5.4C4.6 16.8 4 16.2 4 15.4V12.8C4 12 4.6 11.4 5.4 11.4H18.6C19.4 11.4 20 12 20 12.8V15.4C20 16.2 19.4 16.8 18.6 16.8H17.7"
+        stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M7.3 16.8V18.2" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M16.7 16.8V18.2" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M8 14.3H9.6" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M14.4 14.3H16" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
+"""
 
     st.markdown(
         f"""
 <style>
-/* ===== LANDING (LOOK LIKE SCREENSHOT) ===== */
+/* ===== LANDING (SCREENSHOT LOOK) ===== */
 
-/* full-bleed canvas */
 .landing-canvas {{
   position: relative;
   width: 100%;
@@ -700,7 +689,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   box-shadow: 0 30px 90px rgba(0,0,0,.55);
 }}
 
-/* background image + dark overlay */
 .landing-bg {{
   position:absolute;
   inset:0;
@@ -710,6 +698,7 @@ def render_landing_login() -> tuple[str, str, bool]:
   transform: scale(1.06);
   filter: saturate(1.05) contrast(1.08);
 }}
+
 .landing-dim {{
   position:absolute;
   inset:0;
@@ -717,7 +706,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   backdrop-filter: blur(10px);
 }}
 
-/* siren glow */
 .landing-sirens {{
   position:absolute;
   inset:-45% -25%;
@@ -745,7 +733,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   background: radial-gradient(circle, rgba(255,80,120,.60), transparent 62%);
 }}
 
-/* subtle film grain */
 .landing-grain {{
   position:absolute;
   inset:0;
@@ -755,7 +742,6 @@ def render_landing_login() -> tuple[str, str, bool]:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }}
 
-/* top hero text area centered */
 .landing-hero {{
   position: relative;
   z-index: 2;
@@ -786,6 +772,11 @@ def render_landing_login() -> tuple[str, str, bool]:
 .landing-pill .dot {{
   opacity:.55;
 }}
+.landing-pill .car {{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}}
 
 .landing-title {{
   margin: 22px 0 10px;
@@ -797,6 +788,14 @@ def render_landing_login() -> tuple[str, str, bool]:
 }}
 @media (max-width: 980px) {{
   .landing-title {{ font-size: 44px; }}
+}}
+
+.landing-locale {{
+  margin: 0 0 14px;
+  font-family: Oswald, Inter, sans-serif;
+  font-size: 28px;
+  letter-spacing: .2px;
+  color: rgba(255,255,255,.88);
 }}
 
 .landing-subtitle {{
@@ -811,7 +810,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   color: rgba(255,255,255,.84);
 }}
 
-/* shortcuts pills row */
 .landing-shortcuts {{
   margin-top: 16px;
   display:flex;
@@ -829,7 +827,6 @@ def render_landing_login() -> tuple[str, str, bool]:
   font-weight: 900;
 }}
 
-/* login glass card */
 .login-wrap {{
   position: relative;
   z-index: 3;
@@ -844,30 +841,15 @@ def render_landing_login() -> tuple[str, str, bool]:
   backdrop-filter: blur(22px);
   overflow: hidden;
 }}
-
 .login-card-inner {{
   padding: 22px 22px 16px;
 }}
-
 .login-title {{
   margin: 0;
   font-family: Oswald, Inter, sans-serif;
   font-size: 32px;
   color: rgba(255,255,255,.92);
   text-align: center;
-}}
-
-.login-help {{
-  margin: 10px 0 14px;
-  color: rgba(255,255,255,.70);
-  text-align: center;
-}}
-
-.field-row {{
-  display:flex;
-  gap: 12px;
-  align-items:center;
-  margin-top: 10px;
 }}
 
 .icon-badge {{
@@ -927,9 +909,15 @@ def render_landing_login() -> tuple[str, str, bool]:
   <div class="landing-grain"></div>
 
   <div class="landing-hero">
-    <div class="landing-pill">🚓 <span>PLATFORM</span> <span class="dot">•</span> <span>CORSO PL 2026</span></div>
+    <div class="landing-pill">
+      <span class="car">{car_svg}</span>
+      <span>PLATFORM</span>
+      <span class="dot">•</span>
+      <span>CORSO PL 2026</span>
+    </div>
 
     <div class="landing-title">Banca dati, simulazioni e quiz</div>
+    <div class="landing-locale">Polizia Locale</div>
 
     <div class="landing-subtitle">Piattaforma didattica a cura di <b>Raffaele Sotero</b></div>
     <div class="landing-bullet">• Correzione finale dettagliata</div>
@@ -945,7 +933,6 @@ def render_landing_login() -> tuple[str, str, bool]:
         unsafe_allow_html=True,
     )
 
-    # card centrata (come screenshot)
     left, mid, right = st.columns([1.2, 1.0, 1.2])
     with mid:
         st.markdown(
@@ -954,7 +941,6 @@ def render_landing_login() -> tuple[str, str, bool]:
               <div class="login-card">
                 <div class="login-card-inner">
                   <div class="login-title">Accesso corsista</div>
-                  <div class="login-help">Inserisci Nome e Cognome (es. Mario Rossi)</div>
                 </div>
               </div>
             </div>
@@ -963,7 +949,6 @@ def render_landing_login() -> tuple[str, str, bool]:
         )
 
         with st.form("landing_login_form", clear_on_submit=False):
-            # Riga 1: icona + input
             c1, c2 = st.columns([0.18, 0.82], vertical_alignment="center")
             with c1:
                 st.markdown('<div class="icon-badge">👤</div>', unsafe_allow_html=True)
@@ -974,7 +959,6 @@ def render_landing_login() -> tuple[str, str, bool]:
                     label_visibility="collapsed",
                 )
 
-            # Riga 2: icona + input
             c3, c4 = st.columns([0.18, 0.82], vertical_alignment="center")
             with c3:
                 st.markdown('<div class="icon-badge">🔒</div>', unsafe_allow_html=True)
@@ -1000,7 +984,6 @@ def render_landing_login() -> tuple[str, str, bool]:
         )
 
     return full_name, course_pass, clicked
-# ... existing code ...
 
 
 # =========================================================
@@ -1051,16 +1034,13 @@ with tab_doc:
         except Exception as e:
             st.error("Errore durante la lettura o l'inserimento del CSV.")
             st.exception(e)
-
     elif up and admin != ADMIN_CODE:
         st.warning("Codice docente errato.")
-
 
 # =========================================================
 # CORSISTA
 # =========================================================
 with tab_stud:
-    # ---------- LOGIN ----------
     if not st.session_state["logged"]:
         full_name, course_pass, clicked = render_landing_login()
 
@@ -1241,7 +1221,6 @@ with tab_stud:
 
         st.stop()
 
-    # ---------- IN PROGRESS ----------
     if st.session_state["in_progress"]:
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
@@ -1347,7 +1326,6 @@ with tab_stud:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- RESULTS ----------
     if st.session_state["show_results"]:
         session_id = st.session_state["session_id"]
         rows = fetch_session_questions(session_id)
