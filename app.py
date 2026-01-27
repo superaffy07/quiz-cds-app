@@ -9,15 +9,7 @@ import streamlit.components.v1 as components
 from supabase import create_client, Client
 
 
-# =========================================================
-# PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
-# =========================================================
-st.set_page_config(
-    page_title="Banca dati, simulazioni e quiz — Polizia Locale",
-    page_icon="🚓",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+
 
 # =========================================================
 # STILI (NO BLU, MODERNO, LEGGIBILE)
