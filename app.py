@@ -419,95 +419,185 @@ def render_header(total_questions: int):
 # APP
 # =========================================================
 bank_count = fetch_bank_count()
+# =========================================================
+# LANDING WOW (sfondo + login centrato stile "mockup")
+# =========================================================
+BG_IMAGE_URL = "INCOLLA_QUI_IL_TUO_RAW_URL_GITHUB"
+
+LANDING_WOW_CSS = f"""
+<style>
+/* Nasconde header Streamlit (quello sopra) + footer */
+header[data-testid="stHeader"] {{ display:none; }}
+footer {{ display:none; }}
+#MainMenu {{ visibility:hidden; }}
+
+/* Sfondo a immagine + overlay */
+.stApp {{
+  background:
+    linear-gradient(180deg, rgba(6,10,25,.70) 0%, rgba(13,18,35,.78) 40%, rgba(10,12,25,.85) 100%),
+    url("{BG_IMAGE_URL}");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}}
+
+.block-container {{
+  max-width: 1200px;
+  padding-top: 24px;
+  padding-bottom: 24px;
+}}
+
+/* Wrapper landing */
+.landing-wrap {{
+  min-height: calc(100vh - 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+}}
+
+/* Colonna contenuti (titoli + card) */
+.landing-inner {{
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: 22px;
+}}
+@media (max-width: 980px) {{
+  .landing-inner {{ grid-template-columns: 1fr; }}
+}}
+
+/* Badge top */
+.landing-badge {{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: rgba(255,255,255,.92);
+  font-weight: 700;
+  letter-spacing: .2px;
+  width: fit-content;
+  backdrop-filter: blur(8px);
+}}
+
+/* Titoli */
+.landing-title {{
+  margin-top: 16px;
+  font-size: 52px;
+  line-height: 1.05;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 12px 40px rgba(0,0,0,.35);
+}}
+@media (max-width: 980px) {{
+  .landing-title {{ font-size: 40px; }}
+}}
+.landing-sub {{
+  margin-top: 12px;
+  font-size: 16px;
+  color: rgba(255,255,255,.86);
+  line-height: 1.5;
+  max-width: 620px;
+}}
+.landing-pills {{
+  margin-top: 16px;
+  display: inline-flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}}
+.landing-pill {{
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.18);
+  color: rgba(255,255,255,.90);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  backdrop-filter: blur(8px);
+}}
+
+/* Card glass login */
+.glass {{
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 18px 60px rgba(0,0,0,.35);
+  backdrop-filter: blur(12px);
+}}
+.glass h3 {{
+  margin: 0 0 10px 0;
+  color: rgba(255,255,255,.95);
+  font-size: 28px;
+  font-weight: 900;
+}}
+.glass .hint {{
+  color: rgba(255,255,255,.80);
+  font-size: 14px;
+  margin-bottom: 12px;
+}}
+
+/* INPUT compatti e pi?? stretti */
+.login-box {{
+  max-width: 420px;
+}}
+/* Streamlit input rounding */
+div[data-baseweb="input"] > div {{
+  border-radius: 14px !important;
+}}
+/* Altezza input */
+input {{
+  height: 44px !important;
+  font-size: 15px !important;
+}}
+/* Bottone giallo */
+.stButton > button {{
+  height: 48px !important;
+  border-radius: 14px !important;
+  font-weight: 900 !important;
+  font-size: 18px !important;
+  border: 1px solid rgba(0,0,0,.15) !important;
+  background: linear-gradient(180deg, #f6d07b 0%, #e7a93c 100%) !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 14px 32px rgba(0,0,0,.25) !important;
+}}
+.stButton > button:hover {{
+  transform: translateY(-1px);
+}}
+</style>
+"""
+
+def render_landing_wow():
+    st.markdown(LANDING_WOW_CSS, unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="landing-wrap">
+          <div class="landing-inner">
+            <div>
+              <div class="landing-badge">???? <span>PLATFORM</span> ??? <span>CORSO PL 2026</span></div>
+              <div class="landing-title">Banca dati, simulazioni e quiz</div>
+              <div class="landing-sub">
+                Piattaforma didattica a cura di <b>Raffaele Sotero</b><br/>
+                ??? Correzione finale dettagliata
+              </div>
+              <div class="landing-pills">
+                <div class="landing-pill">Casi pratici</div>
+                <div class="landing-pill">Quiz</div>
+                <div class="landing-pill">Banca dati</div>
+              </div>
+            </div>
+            <div class="glass">
+              <h3>Accesso corsista</h3>
+              <div class="hint">Accesso riservato ai corsisti ??? Inserisci Nome e Cognome e la password del corso.</div>
+              <div class="login-box">
+        """,
+        unsafe_allow_html=True,
+    )
+
 # render_header(bank_count)
-# ===============================
-# HERO / LANDING PAGE
-# ===============================
-components.html(
-    """
-    <style>
-        .hero-wrapper {
-            background: linear-gradient(135deg, #0b2c4d, #0f4c81);
-            padding: 48px 40px;
-            border-radius: 18px;
-            color: white;
-            margin-bottom: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.15);
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 18px;
-        }
-        .hero-title {
-            font-size: 42px;
-            font-weight: 800;
-            line-height: 1.15;
-            margin-bottom: 14px;
-        }
-        .hero-sub {
-            font-size: 17px;
-            opacity: 0.92;
-            max-width: 900px;
-            margin-bottom: 34px;
-        }
-        .hero-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-        }
-        .hero-card {
-            background: rgba(255,255,255,0.12);
-            border-radius: 14px;
-            padding: 18px;
-            font-size: 15px;
-            line-height: 1.4;
-            backdrop-filter: blur(6px);
-        }
-        .hero-card h4 {
-            margin: 0 0 6px 0;
-            font-size: 16px;
-            font-weight: 700;
-        }
-    </style>
-
-    <div class="hero-wrapper">
-        <div class="hero-badge">🚓 Platform Corso PL</div>
-
-        <div class="hero-title">
-            Banca dati, simulazioni e quiz<br>
-            <span style="opacity:0.9;">Polizia Locale</span>
-        </div>
-
-        <div class="hero-sub">
-            Piattaforma didattica professionale per la preparazione ai concorsi
-            di Polizia Locale: simulazioni d’esame, banca dati normativa
-            e casi pratici commentati.
-        </div>
-
-        <div class="hero-cards">
-            <div class="hero-card">
-                <h4>📚 Banca dati</h4>
-                Normativa aggiornata e consultabile per lo studio.
-            </div>
-            <div class="hero-card">
-                <h4>📝 Simulazioni quiz</h4>
-                Prove d’esame realistiche con timer e correzione.
-            </div>
-            <div class="hero-card">
-                <h4>⚖️ Casi pratici</h4>
-                Applicazione concreta delle norme operative.
-            </div>
-        </div>
-    </div>
-    """,
-    height=420,
-)
 
 tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
@@ -584,54 +674,17 @@ with tab_doc:
 # CORSISTA
 # =========================================================
 with tab_stud:
-    st.markdown(
-        """
-<style>
-/* === CENTRA LOGIN === */
-.login-wrapper {
-    max-width: 420px;
-    margin: 0 auto;
-    margin-top: 20px;
-}
-
-/* === INPUT PI?? COMPATTI === */
-.login-wrapper input {
-    height: 42px !important;
-    font-size: 15px !important;
-}
-
-/* === LABEL PI?? COMPATTE === */
-.login-wrapper label {
-    margin-bottom: 4px !important;
-    font-size: 14px;
-}
-
-/* === BOTTONE ENTRA === */
-.login-wrapper button {
-    height: 46px;
-    font-size: 16px;
-    font-weight: 700;
-}
-
-/* === RIDUCE SPAZI STREAMLIT === */
-div[data-testid="stVerticalBlock"] > div {
-    gap: 0.6rem;
-}
-</style>
-""",
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("Accesso corsista")
-
-    # ---------- LOGIN ----------
+    # ---------- LOGIN WOW ----------
     if not st.session_state["logged"]:
-        st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
+        render_landing_wow()
 
-        full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
-        course_pass = st.text_input("Password corso", type="password")
+        # form = pi?? pulito + niente spazi inutili
+        with st.form("login_form", clear_on_submit=False):
+            full_name = st.text_input("Nome e Cognome", placeholder="Es. Mario Rossi")
+            course_pass = st.text_input("Password del corso", type="password", placeholder="????????????????????????")
+            submit = st.form_submit_button("Entra", use_container_width=True)
 
-        if st.button("Entra", use_container_width=True):
+        if submit:
             if not full_name or not course_pass:
                 st.error("Inserisci Nome e Cognome + Password.")
             elif course_pass != COURSE_PASSWORD:
@@ -642,10 +695,10 @@ div[data-testid="stVerticalBlock"] > div {
                 st.session_state["menu_page"] = "home"
                 st.rerun()
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div></div></div>", unsafe_allow_html=True)
         st.stop()
 
-    # ---------- PROFILO ----------
+    # --- da qui in poi: LOGGATO (resto come hai ora) ---
     student = st.session_state["student"]
     st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
 
