@@ -584,29 +584,65 @@ with tab_doc:
 # CORSISTA
 # =========================================================
 with tab_stud:
+    st.markdown(
+        """
+<style>
+/* === CENTRA LOGIN === */
+.login-wrapper {
+    max-width: 420px;
+    margin: 0 auto;
+    margin-top: 20px;
+}
+
+/* === INPUT PI?? COMPATTI === */
+.login-wrapper input {
+    height: 42px !important;
+    font-size: 15px !important;
+}
+
+/* === LABEL PI?? COMPATTE === */
+.login-wrapper label {
+    margin-bottom: 4px !important;
+    font-size: 14px;
+}
+
+/* === BOTTONE ENTRA === */
+.login-wrapper button {
+    height: 46px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* === RIDUCE SPAZI STREAMLIT === */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0.6rem;
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
     st.subheader("Accesso corsista")
 
     # ---------- LOGIN ----------
     if not st.session_state["logged"]:
-        full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
-        course_pass = st.text_input("Password corso", type="password", help="Inserisci la password per accedere (es. polizia2026)")
+        st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
 
-        if st.button("Entra"):
+        full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
+        course_pass = st.text_input("Password corso", type="password")
+
+        if st.button("Entra", use_container_width=True):
             if not full_name or not course_pass:
                 st.error("Inserisci Nome e Cognome + Password.")
             elif course_pass != COURSE_PASSWORD:
-                st.error("Password errata. Riprova.")
+                st.error("Password errata.")
             else:
-                try:
-                    st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
-                    st.session_state["logged"] = True
-                    st.session_state["menu_page"] = "home"
-                    st.success("Accesso OK ✅")
-                    st.rerun()
-                except Exception as e:
-                    st.error("Errore accesso.")
-                    st.exception(e)
+                st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
+                st.session_state["logged"] = True
+                st.session_state["menu_page"] = "home"
+                st.rerun()
 
+        st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
 
     # ---------- PROFILO ----------
