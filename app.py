@@ -1,549 +1,1173 @@
-import streamlit as st
+import os
+import time
+import random
 import base64
-import json
-import csv
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import List, Dict
 
-# ---------------------------
-# CONFIG
-# ---------------------------
+import streamlit as st
+import streamlit.components.v1 as components
+from supabase import create_client, Client
+
+# =========================================================
+# PAGE CONFIG (UNA SOLA VOLTA, IN TESTA AL FILE)
+# =========================================================
 st.set_page_config(
-    page_title="PIATTAFORMA • CORSO PL",
+    page_title="Banca dati, simulazioni e quiz — Polizia Locale",
     page_icon="🚓",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-COURSE_PASSWORD = "polizia2026"      # password corsista
-TEACHER_PASSWORD = "docente2026"     # password docente (cambiala)
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+# =========================================================
+# STILI (NO BLU, MODERNO, LEGGIBILE)
+# =========================================================
+CUSTOM_CSS = """
+<style>
+/* layout */
+.block-container { max-width: 1100px; padding-top: 1.2rem; padding-bottom: 3rem; }
 
-# ---------------------------
-# HELPERS
-# ---------------------------
-def img_to_base64(path: Path) -> str:
+/* background chiaro pulito */
+.stApp { background: #f6f7fb; }
+
+/* card header */
+.hero {
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 18px;
+  padding: 18px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  margin-bottom: 18px;
+}
+.hero-title {
+  font-size: 30px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: .2px;
+  color: #111827;
+}
+.hero-sub {
+  margin: 6px 0 0 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.badges { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+.badge {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fbfbfd;
+  color: #111827;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* tabs */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 14px;
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #374151;
+  font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+  background: #f3f4f6 !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+}
+
+/* buttons */
+.stButton > button {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: white;
+  color: #111827;
+  transition: all .12s ease-in-out;
+  font-weight: 700;
+}
+.stButton > button:hover {
+  transform: translateY(-1px);
+  background: #f9fafb;
+}
+
+/* radio / inputs */
+div[data-baseweb="input"] > div { border-radius: 12px !important; }
+.stRadio label { color: #111827; }
+
+/* alert */
+div[data-testid="stAlert"] {
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.08);
+}
+
+/* divider */
+hr { border-top: 1px solid rgba(0,0,0,.08); }
+
+/* =========================================
+   QUIZ CARD LOOK
+   ========================================= */
+.quiz-card{
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.05);
+  padding: 14px 14px 10px 14px;
+  margin: 10px 0 12px 0;
+}
+.quiz-title{
+  font-weight: 850;
+  font-size: 16px;
+  color: #111827;
+  margin: 0 0 6px 0;
+}
+
+/* =========================================
+   MENU CARDS (NUOVO)
+   ========================================= */
+.menu-grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+@media (max-width: 980px){
+  .menu-grid{ grid-template-columns: 1fr; }
+}
+.menu-card{
+  background: white;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.05);
+  padding: 14px 14px;
+}
+.menu-title{
+  font-size: 16px;
+  font-weight: 850;
+  color: #111827;
+  margin: 0 0 6px 0;
+}
+.menu-desc{
+  color: #4b5563;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+  line-height: 1.35;
+}
+.menu-chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.08);
+  background:#fbfbfd;
+  color:#111827;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* =========================================
+   BOTTONE ROSSO SOLO PER "TERMINA"
+   ========================================= */
+.end-btn-wrap .stButton > button{
+  background: #b42318 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  box-shadow: 0 10px 22px rgba(180,35,24,.22) !important;
+}
+.end-btn-wrap .stButton > button:hover{
+  background: #9b1c14 !important;
+  transform: translateY(-1px);
+}
+
+/* === Stato risposta (pill verde/gialla) === */
+.status-pill{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  margin: 8px 0 10px 0;
+  font-size: 13px;
+}
+.status-pill.ok{
+  background: rgba(34,197,94,0.12);
+}
+.status-pill.warn{
+  background: rgba(245,158,11,0.14);
+}
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+# =========================================================
+# COSTANTI
+# =========================================================
+N_QUESTIONS_DEFAULT = 30
+DURATION_SECONDS_DEFAULT = 30 * 60  # 30 minuti
+
+# =========================================================
+# ACCESSO CORSO
+# =========================================================
+COURSE_PASSWORD = "polizia2026"
+COURSE_CLASS_CODE = "CORSO_PL_2026"
+
+# =========================================================
+# TIMER FLUIDO (NO RERUN, NO SCURIMENTO)
+# =========================================================
+def render_live_timer(end_ts: float):
+    """
+    Mostra un countdown fluido aggiornato ogni 1s lato browser.
+    NON provoca rerun Streamlit -> niente schermo che scurisce.
+    """
+    end_ms = int(end_ts * 1000)
+    components.html(
+        f"""
+        <div style="margin: 0 0 10px 0;">
+          <div style="font-size: 20px; font-weight: 800; color:#111827;">
+            ⏱️ Tempo residuo: <span id="tval">--:--</span>
+          </div>
+        </div>
+        <script>
+          const end = {end_ms};
+          function pad(n) {{ return String(n).padStart(2,'0'); }}
+          function tick(){{
+            const now = Date.now();
+            let remaining = Math.max(0, Math.floor((end - now)/1000));
+            const m = Math.floor(remaining/60);
+            const s = remaining % 60;
+            document.getElementById("tval").textContent = pad(m) + ":" + pad(s);
+          }}
+          tick();
+          setInterval(tick, 1000);
+        </script>
+        """,
+        height=40,
+    )
+
+# =========================================================
+# SUPABASE
+# =========================================================
+def get_secret(name: str, default: str = "") -> str:
+    try:
+        v = st.secrets.get(name, default)
+        if v:
+            return v
+    except Exception:
+        pass
+    return os.getenv(name, default)
+
+SUPABASE_URL = get_secret("SUPABASE_URL")
+SUPABASE_ANON_KEY = get_secret("SUPABASE_ANON_KEY")
+ADMIN_CODE = get_secret("ADMIN_CODE", "DOCENTE123")
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    st.error("Mancano SUPABASE_URL / SUPABASE_ANON_KEY nelle Secrets (o env).")
+    st.stop()
+
+sb: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# =========================================================
+# DB HELPERS
+# =========================================================
+def upsert_student(class_code: str, nickname: str) -> Dict:
+    class_code = class_code.strip()
+    nickname = nickname.strip()
+
+    res = (
+        sb.table("students")
+        .select("*")
+        .eq("class_code", class_code)
+        .eq("nickname", nickname)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if res:
+        return res[0]
+
+    ins = sb.table("students").insert({"class_code": class_code, "nickname": nickname}).execute().data
+    return ins[0]
+
+def create_session(student_id: int, n_questions: int) -> Dict:
+    payload = {
+        "student_id": student_id,
+        "mode": "sim",
+        "topic_scope": "bank",
+        "selected_topic_id": None,
+        "n_questions": int(n_questions),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return sb.table("sessions").insert(payload).execute().data[0]
+
+def finish_session(session_id: str) -> None:
+    sb.table("sessions").update({"finished_at": datetime.now(timezone.utc).isoformat()}).eq("id", session_id).execute()
+
+def fetch_bank_count() -> int:
+    res = sb.table("question_bank").select("id", count="exact").limit(1).execute()
+    return int(res.count or 0)
+
+def fetch_all_bank_questions() -> List[Dict]:
+    return sb.table("question_bank").select("*").order("id").execute().data or []
+
+def insert_session_questions(session_id: str, questions: List[Dict]) -> None:
+    rows = []
+    for q in questions:
+        qa = (q.get("question_text") or "").strip()
+        oa = (q.get("option_a") or "").strip()
+        ob = (q.get("option_b") or "").strip()
+        oc = (q.get("option_c") or "").strip()
+        od = (q.get("option_d") or "").strip()
+
+        co = (q.get("correct_option") or "").strip().upper()
+        if co not in ["A", "B", "C", "D"]:
+            co = "A"
+
+        if od == "" and co == "D":
+            if oc:
+                co = "C"
+            elif ob:
+                co = "B"
+            else:
+                co = "A"
+
+        rows.append(
+            {
+                "session_id": session_id,
+                "topic_id": None,
+                "question_text": qa,
+                "option_a": oa,
+                "option_b": ob,
+                "option_c": oc,
+                "option_d": od if od else "",
+                "correct_option": co,
+                "chosen_option": None,
+                "explanation": (q.get("explanation") or "").strip(),
+            }
+        )
+
+    if rows:
+        sb.table("quiz_answers").insert(rows).execute()
+
+def fetch_session_questions(session_id: str) -> List[Dict]:
+    return (
+        sb.table("quiz_answers")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("id")
+        .execute()
+        .data
+        or []
+    )
+
+def update_chosen_option(row_id: int, session_id: str, chosen_letter: str | None) -> None:
+    sb.table("quiz_answers").update({"chosen_option": chosen_letter}).eq("id", row_id).eq("session_id", session_id).execute()
+
+# =========================================================
+# SESSION STATE
+# =========================================================
+def ss_init():
+    defaults = {
+        "logged": False,
+        "student": None,
+        "session_id": None,
+        "in_progress": False,
+        "show_results": False,
+        "started_ts": None,
+        "finished_ts": None,
+        "duration_seconds": DURATION_SECONDS_DEFAULT,
+        "n_questions": N_QUESTIONS_DEFAULT,
+        # NUOVO: pagina menu dopo login
+        "menu_page": "home",   # home | sim | bank | case
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+ss_init()
+
+# =========================================================
+# HEADER
+# =========================================================
+def render_header(total_questions: int):
+    st.markdown(
+        f"""
+<div class="hero">
+  <div class="hero-title">🚓 Banca dati, simulazioni e quiz — Polizia Locale</div>
+  <div class="hero-sub">
+    Piattaforma didattica a cura di <b>Raffaele Sotero</b><br>
+    Casi pratici • Quiz • Banca dati • Correzione finale dettagliata
+  </div>
+  <div class="badges">
+    <div class="badge">📚 <strong>Banca dati</strong>: {total_questions} domande</div>
+    <div class="badge">⏱️ <strong>Tempo</strong>: {DURATION_SECONDS_DEFAULT//60} minuti</div>
+    <div class="badge">✅ <strong>Valutazione</strong>: 1 punto per risposta esatta</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+# =========================================================
+# APP
+# =========================================================
+bank_count = fetch_bank_count()
+# render_header(bank_count)
+# ===============================
+# HERO / LANDING PAGE (NUOVO)
+# ===============================
+def _img_to_base64(path: Path) -> str:
     return base64.b64encode(path.read_bytes()).decode()
 
-def ensure_state():
-    st.session_state.setdefault("is_auth", False)
-    st.session_state.setdefault("is_teacher", False)
-    st.session_state.setdefault("user_name", "")
-    st.session_state.setdefault("page", "HOME")  # HOME | QUIZ | CASI | BANCA | DOCENTE
+_bg_path = Path("assets/bg.png")
+if _bg_path.exists():
+    _bg_b64 = _img_to_base64(_bg_path)
 
-def logout():
-    st.session_state.is_auth = False
-    st.session_state.is_teacher = False
-    st.session_state.user_name = ""
-    st.session_state.page = "HOME"
-    st.rerun()
-
-def goto(page: str):
-    st.session_state.page = page
-    st.rerun()
-
-def safe_load_items_from_upload(uploaded_file):
-    """
-    Accetta:
-      - JSON: lista di domande (dict)
-      - CSV: colonne consigliate:
-          domanda, A, B, C, corretta, spiegazione (facoltativa)
-    Ritorna: list[dict]
-    """
-    name = uploaded_file.name.lower()
-    raw = uploaded_file.getvalue()
-
-    if name.endswith(".json"):
-        data = json.loads(raw.decode("utf-8"))
-        if isinstance(data, dict) and "items" in data:
-            data = data["items"]
-        if not isinstance(data, list):
-            raise ValueError("JSON non valido: deve essere una LISTA di domande (oppure {'items':[...]}).")
-        return data
-
-    if name.endswith(".csv"):
-        text = raw.decode("utf-8", errors="ignore").splitlines()
-        reader = csv.DictReader(text)
-        items = []
-        for r in reader:
-            # normalizzo chiavi
-            domanda = (r.get("domanda") or r.get("Domanda") or "").strip()
-            A = (r.get("A") or r.get("a") or "").strip()
-            B = (r.get("B") or r.get("b") or "").strip()
-            C = (r.get("C") or r.get("c") or "").strip()
-            corretta = (r.get("corretta") or r.get("Corretta") or r.get("risposta") or "").strip()
-            spiegazione = (r.get("spiegazione") or r.get("Spiegazione") or "").strip()
-
-            if not domanda or not A or not B or not C:
-                # salto righe incomplete
-                continue
-
-            item = {
-                "domanda": domanda,
-                "opzioni": [A, B, C],
-                "corretta": corretta,      # può essere "A"/"B"/"C" oppure testo
-                "spiegazione": spiegazione
-            }
-            items.append(item)
-
-        if not items:
-            raise ValueError("CSV letto ma nessuna riga valida. Controlla intestazioni e colonne.")
-        return items
-
-    raise ValueError("Formato non supportato. Carica solo .json o .csv")
-
-def save_bank(target: str, items: list, label: str = ""):
-    """
-    target: QUIZ | CASI | BANCA
-    Salva un file JSON in data/<target>_bank.json
-    """
-    file_map = {
-        "QUIZ": DATA_DIR / "quiz_bank.json",
-        "CASI": DATA_DIR / "casi_bank.json",
-        "BANCA": DATA_DIR / "bancadati_bank.json",
-    }
-    path = file_map[target]
-    if path.exists():
-        existing = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(existing, list):
-            existing = []
-    else:
-        existing = []
-
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    for it in items:
-        it.setdefault("tag", label.strip())
-        it.setdefault("created_at", stamp)
-
-    existing.extend(items)
-    path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
-    return path, len(items), len(existing)
-
-def load_bank(target: str):
-    file_map = {
-        "QUIZ": DATA_DIR / "quiz_bank.json",
-        "CASI": DATA_DIR / "casi_bank.json",
-        "BANCA": DATA_DIR / "bancadati_bank.json",
-    }
-    path = file_map[target]
-    if not path.exists():
-        return []
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data if isinstance(data, list) else []
-
-# ---------------------------
-# INIT
-# ---------------------------
-ensure_state()
-
-# ---------------------------
-# BACKGROUND
-# ---------------------------
-bg_path = Path("assets/bg.png")
-if not bg_path.exists():
-    st.error("❌ Non trovo assets/bg.png")
-    st.stop()
-bg_b64 = img_to_base64(bg_path)
-
-# ---------------------------
-# STYLES (i tuoi)
-# ---------------------------
-st.markdown(
-    f"""
-    <style>
-    .stApp {{
-        background: url("data:image/png;base64,{bg_b64}") no-repeat center center fixed;
-        background-size: cover;
-    }}
-    #MainMenu {{visibility:hidden;}}
-    footer {{visibility:hidden;}}
-    header {{visibility:hidden;}}
-    section[data-testid="stSidebar"] {{display:none;}}
-
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(ellipse at top, rgba(0,0,0,0.32), rgba(0,0,0,0.12) 45%, rgba(0,0,0,0.34));
-        pointer-events: none;
-        z-index: 0;
-    }}
-
-    .block-container {{
-        position: relative;
-        z-index: 1;
-        padding-top: 14px !important;
-        padding-bottom: 14px !important;
-        max-width: 1100px !important;
-    }}
-
-    .hero {{
-        text-align: center;
-        color: rgba(255,255,255,0.96);
-        text-shadow: 0 10px 30px rgba(0,0,0,0.45);
-        margin-top: 4px;
-        margin-bottom: 8px;
-    }}
-
-    .pill {{
-        display:inline-flex;
-        align-items:center;
-        gap:10px;
-        padding: 9px 16px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.14);
-        border: 1px solid rgba(255,255,255,0.20);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        font-weight: 850;
-        letter-spacing: 0.35px;
-        margin-bottom: 12px;
-        font-size: 13px;
-    }}
-
-    .hero h1 {{
-        font-size: 46px;
-        line-height: 1.04;
-        margin: 0 0 8px 0;
-        font-weight: 950;
-        letter-spacing: 0.2px;
-    }}
-
-    .hero .sub {{
-        font-size: 18px;
-        font-weight: 900;
-        opacity: 0.98;
-        margin-top: 4px;
-    }}
-
-    .login-pill {{
-        width: fit-content;
-        margin: 12px auto 10px auto;
-        padding: 10px 16px;
-        border-radius: 999px;
-        background: rgba(20, 23, 35, 0.35);
-        border: 1px solid rgba(255,255,255,0.20);
-        color: rgba(255,255,255,0.96);
-        font-weight: 900;
-        letter-spacing: 0.25px;
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        text-shadow: 0 6px 18px rgba(0,0,0,0.55);
-        font-size: 14px;
-    }}
-
-    #card_marker {{ display:none; }}
-    div[data-testid="stVerticalBlock"]:has(#card_marker) {{
-        max-width: 760px;
-        margin: 0 auto;
-        padding: 18px;
-        border-radius: 18px;
-        background: linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.14) 100%);
-        border: 1px solid rgba(255,255,255,0.22);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        box-shadow: 0 28px 90px rgba(0,0,0,0.28);
-    }}
-
-    .stButton {{
-        display: flex !important;
-        justify-content: center !important;
-        width: 100% !important;
-        margin-top: 10px !important;
-    }}
-
-    .stButton > button {{
-        width: auto !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding: 11px 26px !important;
-        font-size: 16px !important;
-        font-weight: 950 !important;
-        border-radius: 14px !important;
-        border: 1px solid rgba(0,0,0,0.18) !important;
-        background: linear-gradient(180deg, rgba(255,203,102,1) 0%, rgba(226,155,56,1) 100%) !important;
-        color: rgba(0,0,0,0.86) !important;
-        box-shadow: 0 10px 28px rgba(0,0,0,0.25) !important;
-        display: block !important;
-        transition: transform .08s ease, filter .12s ease;
-    }}
-
-    .menu-wrap {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 12px;
-    }}
-
-    .menu-card {{
-        background: rgba(255,255,255,0.10);
-        border: 1px solid rgba(255,255,255,0.16);
-        border-radius: 14px;
-        padding: 12px;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow: 0 18px 50px rgba(0,0,0,0.20);
-        text-align: left;
-    }}
-
-    .menu-card h3 {{
-        margin: 0 0 4px 0;
-        color: rgba(255,255,255,0.95);
-        font-size: 16px;
-        font-weight: 950;
-    }}
-
-    .menu-card p {{
-        margin: 0;
-        color: rgba(255,255,255,0.82);
-        font-size: 13px;
-        font-weight: 650;
-    }}
-
-    @media (max-width: 640px) {{
-        .block-container {{
-            padding-left: 12px !important;
-            padding-right: 12px !important;
+    st.markdown(
+        f"""
+        <style>
+        /* background image */
+        .stApp {{
+            background: url("data:image/png;base64,{{_bg_b64}}") no-repeat center center fixed;
+            background-size: cover;
         }}
-        .hero h1 {{ font-size: 34px; }}
-        .menu-wrap {{ grid-template-columns: 1fr; }}
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+        /* overlay per leggibilità */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at top, rgba(0,0,0,0.32), rgba(0,0,0,0.12) 45%, rgba(0,0,0,0.34));
+            pointer-events: none;
+            z-index: 0;
+        }}
+        .block-container {{
+            position: relative;
+            z-index: 1;
+        }}
 
-# ---------------------------
-# HERO
-# ---------------------------
+        /* HERO */
+        .home-hero {{
+            text-align: center;
+            color: rgba(255,255,255,0.96);
+            text-shadow: 0 10px 30px rgba(0,0,0,0.45);
+            margin-top: 4px;
+            margin-bottom: 14px;
+        }}
+        .home-pill {{
+            display:inline-flex;
+            align-items:center;
+            gap:10px;
+            padding: 9px 16px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.14);
+            border: 1px solid rgba(255,255,255,0.20);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-weight: 850;
+            letter-spacing: 0.35px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }}
+        .home-hero h1 {{
+            font-size: 44px;
+            line-height: 1.05;
+            margin: 0 0 8px 0;
+            font-weight: 950;
+            letter-spacing: 0.2px;
+        }}
+        .home-hero .sub {{
+            font-size: 16px;
+            font-weight: 900;
+            opacity: 0.98;
+            margin-top: 4px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.info("ℹ️ Per usare lo sfondo: crea la cartella 'assets' e inserisci il file 'bg.png' in 'assets/bg.png'.")
+
 st.markdown(
     """
-    <div class="hero">
-      <div class="pill">🚓 <span>PIATTAFORMA • CORSO PL</span></div>
+    <div class="home-hero">
+      <div class="home-pill">🚓 <span>PIATTAFORMA • CORSO PL</span></div>
       <h1>Banca dati, simulazioni e quiz</h1>
-      <div class="sub">Piattaforma didattica a cura di Raffaele Sotero</div>
+      <div class="sub">Piattaforma didattica a cura di <b>Raffaele Sotero</b></div>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# marker
-st.markdown('<div id="card_marker"></div>', unsafe_allow_html=True)
+tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
 
-# ---------------------------
-# LOGIN
-# ---------------------------
-if not st.session_state.is_auth:
-    st.markdown('<div class="login-pill">Accesso (corsista o docente)</div>', unsafe_allow_html=True)
+# =========================================================
+# DOCENTE
+# =========================================================
+with tab_doc:
+    st.subheader("Carica banca dati (CSV)")
+    st.write("CSV richiesto: `question_text, option_a, option_b, option_c, option_d, correct_option` (+ opzionale `explanation`).")
+    st.write("Nota: `option_d` può essere vuota. Se è vuota, la D non comparirà nel quiz.")
 
-    nome = st.text_input("", placeholder="Nome e Cognome (es. Mario Rossi)")
+    admin = st.text_input("Codice docente", type="password")
+    up = st.file_uploader("Carica CSV", type=["csv"])
 
-    colA, colB = st.columns([1, 1])
-    with colA:
-        password = st.text_input("Password corsista", type="password", label_visibility="collapsed",
-                                 placeholder="Password corsista")
-    with colB:
-        docente_flag = st.checkbox("Spunta docente")
+    st.divider()
+    st.write("Domande in banca dati:", fetch_bank_count())
 
-    docente_pass = ""
-    if docente_flag:
-        docente_pass = st.text_input("Password docente", type="password", label_visibility="collapsed",
-                                     placeholder="Password docente")
+    if up and admin == ADMIN_CODE:
+        import pandas as pd
+        import io
 
-    if st.button("Entra"):
-        if not nome.strip():
-            st.error("Inserisci Nome e Cognome.")
-        elif docente_flag:
-            if docente_pass.strip() != TEACHER_PASSWORD:
-                st.error("Password docente errata.")
-            else:
-                st.session_state.is_auth = True
-                st.session_state.is_teacher = True
-                st.session_state.user_name = nome.strip()
-                st.session_state.page = "DOCENTE"
-                st.rerun()
-        else:
-            if password.strip() != COURSE_PASSWORD:
-                st.error("Password corsista errata.")
-            else:
-                st.session_state.is_auth = True
-                st.session_state.is_teacher = False
-                st.session_state.user_name = nome.strip()
-                st.session_state.page = "HOME"
-                st.rerun()
+        raw = up.getvalue()
+        df = None
+        for enc in ("utf-8-sig", "utf-8", "latin1"):
+            try:
+                df = pd.read_csv(io.BytesIO(raw), encoding=enc)
+                break
+            except Exception:
+                df = None
 
-    st.caption("Suggerimento: per il docente entra con la spunta e la password docente.")
-    st.stop()
+        if df is None:
+            st.error("Impossibile leggere il CSV. Salvalo come UTF-8.")
+            st.stop()
 
-# ---------------------------
-# TOP BAR
-# ---------------------------
-left, right = st.columns([3, 1])
-with left:
-    role = "DOCENTE" if st.session_state.is_teacher else "CORSISTA"
-    st.markdown(
-        f"<div class='login-pill'>Loggato: <b>{st.session_state.user_name}</b> · Ruolo: <b>{role}</b></div>",
-        unsafe_allow_html=True
-    )
-with right:
-    if st.button("Esci"):
-        logout()
+        required = ["question_text", "option_a", "option_b", "option_c", "option_d", "correct_option"]
+        miss = [c for c in required if c not in df.columns]
+        if miss:
+            st.error(f"Mancano colonne: {miss}")
+            st.stop()
 
-# ---------------------------
-# PAGES RENDER
-# ---------------------------
-def render_home():
-    st.markdown("<div class='menu-wrap'>", unsafe_allow_html=True)
+        if "explanation" not in df.columns:
+            df["explanation"] = ""
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("""
-        <div class='menu-card'>
-          <h3>⏱️ Simulazione quiz</h3>
-          <p>Prova completa · timer e report finale</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Apri quiz"):
-            goto("QUIZ")
+        df = df.fillna("")
+        df["correct_option"] = df["correct_option"].astype(str).str.strip().str.upper()
+        df["option_d"] = df["option_d"].astype(str).fillna("").str.strip()
 
-    with c2:
-        st.markdown("""
-        <div class='menu-card'>
-          <h3>🧩 Prova pratica</h3>
-          <p>Caso pratico · timer e correzione del test</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Apri caso pratico"):
-            goto("CASI")
+        bad = ~df["correct_option"].isin(["A", "B", "C", "D"])
+        if bad.any():
+            st.error("Trovate righe con correct_option non valido (deve essere A/B/C/D).")
+            st.dataframe(df.loc[bad, ["question_text", "correct_option"]].head(10))
+            st.stop()
 
-    with c3:
-        st.markdown("""
-        <div class='menu-card'>
-          <h3>📚 Banca dati</h3>
-          <p>Studio libero · ricerca e consultazione</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Apri banca dati"):
-            goto("BANCA")
+        bad_d = (df["option_d"] == "") & (df["correct_option"] == "D")
+        if bad_d.any():
+            st.error("Righe con correct_option = D ma option_d vuota. Correggi il CSV.")
+            st.dataframe(df.loc[bad_d, ["question_text", "option_d", "correct_option"]].head(20))
+            st.stop()
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        rows = df[required + ["explanation"]].to_dict(orient="records")
 
-    if st.session_state.is_teacher:
-        st.divider()
-        if st.button("👨‍🏫 Area docente"):
-            goto("DOCENTE")
-
-def render_docente():
-    st.subheader("👨‍🏫 Area docente — Carica contenuti")
-    st.write("Carica un file **CSV o JSON** e scegli dove inserirlo: **Quiz / Casi pratici / Banca dati**.")
-
-    target = st.selectbox("Dove vuoi salvarlo?", ["QUIZ", "CASI", "BANCA"])
-    label = st.text_input("Etichetta / tag (facoltativo)", placeholder="es. CDS, Penale, Amministrativo...")
-
-    up = st.file_uploader("Carica file (.csv o .json)", type=["csv", "json"])
-    if up is not None:
         try:
-            items = safe_load_items_from_upload(up)
-            st.success(f"Letti {len(items)} elementi dal file.")
-            st.json(items[0] if items else {})
-            if st.button("✅ Salva in piattaforma"):
-                path, added, total = save_bank(target, items, label=label)
-                st.success(f"Salvati {added} elementi in {path.name}. Totale ora: {total}")
+            sb.table("question_bank").insert(rows).execute()
+            st.success(f"Caricate {len(rows)} domande ✅")
+            st.rerun()
         except Exception as e:
-            st.error(f"Errore nel caricamento: {e}")
+            st.error("Errore inserimento in question_bank.")
+            st.exception(e)
 
+    elif up and admin != ADMIN_CODE:
+        st.warning("Codice docente errato.")
+
+# =========================================================
+# CORSISTA
+# =========================================================
+with tab_stud:
+    st.markdown(
+        """
+<style>
+/* === CENTRA LOGIN === */
+.login-wrapper {
+    max-width: 420px;
+    margin: 0 auto;
+    margin-top: 20px;
+}
+
+/* === INPUT PI?? COMPATTI === */
+.login-wrapper input {
+    height: 42px !important;
+    font-size: 15px !important;
+}
+
+/* === LABEL PI?? COMPATTE === */
+.login-wrapper label {
+    margin-bottom: 4px !important;
+    font-size: 14px;
+}
+
+/* === BOTTONE ENTRA === */
+.login-wrapper button {
+    height: 46px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* === RIDUCE SPAZI STREAMLIT === */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0.6rem;
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("Accesso corsista")
+
+    # ---------- LOGIN ----------
+    if not st.session_state["logged"]:
+        st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
+
+        full_name = st.text_input("Nome e Cognome (es. Mario Rossi)")
+        course_pass = st.text_input("Password corso", type="password")
+
+        if st.button("Entra", use_container_width=True):
+            if not full_name or not course_pass:
+                st.error("Inserisci Nome e Cognome + Password.")
+            elif course_pass != COURSE_PASSWORD:
+                st.error("Password errata.")
+            else:
+                st.session_state["student"] = upsert_student(COURSE_CLASS_CODE, full_name)
+                st.session_state["logged"] = True
+                st.session_state["menu_page"] = "home"
+                st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.stop()
+
+    # ---------- PROFILO ----------
+    student = st.session_state["student"]
+    st.info(f"Connesso come: {student['nickname']} (corso {student['class_code']})")
+
+    col1, col2, col3 = st.columns([1, 1, 5])
+    with col1:
+        if st.button("🏠 Menu"):
+            st.session_state["menu_page"] = "home"
+            st.rerun()
+
+    with col2:
+        if st.button("Logout"):
+            st.session_state["logged"] = False
+            st.session_state["student"] = None
+            st.session_state["session_id"] = None
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = False
+            st.session_state["started_ts"] = None
+            st.session_state["finished_ts"] = None
+            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["menu_page"] = "home"
+            st.rerun()
+
+    bank_count = fetch_bank_count()
+    st.write(f"📚 Domande in banca dati: **{bank_count}**")
     st.divider()
-    st.write("📌 Contenuti attualmente presenti:")
-    q = len(load_bank("QUIZ"))
-    c = len(load_bank("CASI"))
-    b = len(load_bank("BANCA"))
-    st.info(f"QUIZ: {q} · CASI: {c} · BANCA DATI: {b}")
 
-    st.divider()
-    if st.button("⬅️ Torna alla home"):
-        goto("HOME")
+    # =========================================================
+    # MENU DOPO LOGIN (NUOVO)
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "home":
+        st.markdown("## Seleziona modalità")
+        st.caption("Scegli cosa vuoi fare oggi. La simulazione ha il timer; banca dati e caso pratico per ora sono in modalità base.")
 
-def render_quiz():
-    st.subheader("⏱️ Simulazione quiz")
-    items = load_bank("QUIZ")
-    if not items:
-        st.warning("Nessun quiz caricato. (Docente: carica da Area docente)")
-        if st.button("⬅️ Home"):
-            goto("HOME")
-        return
+        # layout a 3 card
+        st.markdown('<div class="menu-grid">', unsafe_allow_html=True)
 
-    st.write(f"Totale quiz disponibili: **{len(items)}**")
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">⏱️ Timer attivo</div>
+              <div class="menu-title">Simulazione Quiz (30 minuti)</div>
+              <div class="menu-desc">
+                30 domande estratte casualmente dalla banca dati. Alla fine vedi punteggio e correzione dettagliata.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("➡️ Vai alla Simulazione"):
+                st.session_state["menu_page"] = "sim"
+                st.rerun()
 
-    # demo minimale: mostra i primi 5
-    n = st.slider("Quanti visualizzare (demo)", 1, min(20, len(items)), 5)
-    for i, it in enumerate(items[:n], start=1):
-        st.markdown(f"**{i}. {it.get('domanda','(senza testo)')}**")
-        opts = it.get("opzioni", [])
-        if opts:
-            st.radio("Risposta", opts, key=f"q_{i}", label_visibility="collapsed")
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">📚 Studio libero</div>
+              <div class="menu-title">Banca dati</div>
+              <div class="menu-desc">
+                Modalità studio: sfoglia le domande e allenati senza timer. (In arrivo: filtri per argomento)
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with c2:
+            if st.button("➡️ Vai alla Banca dati"):
+                st.session_state["menu_page"] = "bank"
+                st.rerun()
+
+        st.markdown(
+            """
+            <div class="menu-card">
+              <div class="menu-chip">🧠 Allenamento</div>
+              <div class="menu-title">Caso pratico</div>
+              <div class="menu-desc">
+                Rispondi a uno scenario operativo. (In arrivo: correzione guidata e griglia di valutazione)
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with c3:
+            if st.button("➡️ Vai al Caso pratico"):
+                st.session_state["menu_page"] = "case"
+                st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.stop()
+
+    # =========================================================
+    # =========================================================
+    # BANCA DATI (PDF materiali di studio) - NO TIMER
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "bank":
+        st.markdown("## 📚 Banca dati")
+        st.caption("Materiali di studio consultabili (PDF).")
+
+        # Stato selezione documento
+        if "bank_doc" not in st.session_state:
+            st.session_state["bank_doc"] = None
+
+        # Documenti disponibili
+        docs = [
+            {
+                "title": "LEGGE QUADRO (Legge 7 marzo 1986, n. 65)",
+                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/legge%20quadro%20completa.pdf",
+            },
+            {
+                "title": "CODICE DELLA STRADA (D.Lgs. 30 aprile 1992, n. 285)",
+                "url": "https://sjeztkpspxzxyctfjsyg.supabase.co/storage/v1/object/public/study/cds%20completo.pdf",
+            },
+        ]
+
+                # Lista argomenti (clic diretto -> apre PDF in nuova scheda)
+        st.markdown("### Seleziona un argomento (si apre in una nuova scheda)")
+        for d in docs:
+            st.link_button(f"📄 {d['title']}", d["url"], use_container_width=True)
+
+        st.stop()
+
+
+    # =========================================================
+    # CASO PRATICO (placeholder, NO timer)
+    # =========================================================
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "case":
+        st.markdown("## 🧠 Caso pratico")
+        st.caption("Qui inseriremo casi pratici per argomento. Per ora è una versione base senza correzione automatica.")
+
+        st.markdown("### Scenario (demo)")
+        st.write(
+            "Durante un controllo, un conducente circola con documento di guida non esibito al momento del controllo e sostiene di averlo dimenticato a casa."
+        )
+        ans = st.text_area("Scrivi la tua risposta (sintetica ma completa):", height=140)
+
+        colA, colB = st.columns([1, 3])
+        with colA:
+            if st.button("Salva risposta (demo)"):
+                st.success("Risposta salvata (demo). In arrivo: correzione automatica e griglia di valutazione.")
+
+        with colB:
+            st.info("Prossimo step: casi pratici reali + criteri di idoneità + feedback automatico.")
+
+        st.stop()
+
+    # =========================================================
+    # SIMULAZIONE (timer SOLO QUI)
+    # =========================================================
+    if bank_count < N_QUESTIONS_DEFAULT:
+        st.warning(f"Servono almeno {N_QUESTIONS_DEFAULT} domande per la simulazione. Ora: {bank_count}")
+        st.stop()
+
+    # ---------- START SIM (solo se menu_page == sim) ----------
+    if (not st.session_state["in_progress"]) and (not st.session_state["show_results"]) and st.session_state["menu_page"] == "sim":
+        st.markdown("### Simulazione (30 domande – 30 minuti)")
+        st.caption("Le domande vengono estratte casualmente dalla banca dati. Il timer parte SOLO in questa modalità.")
+
+        if st.button("Inizia simulazione"):
+            try:
+                sess = create_session(student_id=student["id"], n_questions=N_QUESTIONS_DEFAULT)
+                st.session_state["session_id"] = sess["id"]
+                st.session_state["in_progress"] = True
+                st.session_state["show_results"] = False
+                st.session_state["started_ts"] = time.time()
+                st.session_state["finished_ts"] = None
+                st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+
+                all_q = fetch_all_bank_questions()
+                picked = random.sample(all_q, N_QUESTIONS_DEFAULT)
+                insert_session_questions(sess["id"], picked)
+
+                st.success("Simulazione avviata ✅")
+                st.rerun()
+            except Exception as e:
+                st.error("Errore avvio simulazione.")
+                st.exception(e)
+
+        st.stop()
+
+    # ---------- IN PROGRESS ----------
+    if st.session_state["in_progress"]:
+        session_id = st.session_state["session_id"]
+        rows = fetch_session_questions(session_id)
+
+        if not rows:
+            st.error("Sessione senza domande (quiz_answers vuota).")
+            st.stop()
+
+        elapsed = int(time.time() - float(st.session_state["started_ts"]))
+        remaining = max(0, int(st.session_state["duration_seconds"]) - elapsed)
+
+        # TIMER SUPER FLUIDO (NO RERUN)
+        end_ts = float(st.session_state["started_ts"]) + int(st.session_state["duration_seconds"])
+        time_up = time.time() >= end_ts
+        render_live_timer(end_ts)
+
+        progress = 1.0 - (remaining / int(st.session_state["duration_seconds"]))
+        st.progress(min(max(progress, 0.0), 1.0))
         st.divider()
 
-    if st.button("⬅️ Home"):
-        goto("HOME")
+        # controllo scadenza
+        if time.time() >= end_ts:
+            st.warning("Tempo scaduto! Correzione automatica…")
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = True
+            st.session_state["finished_ts"] = time.time()
+            finish_session(session_id)
+            st.rerun()
 
-def render_casi():
-    st.subheader("🧩 Casi pratici")
-    items = load_bank("CASI")
-    if not items:
-        st.warning("Nessun caso pratico caricato. (Docente: carica da Area docente)")
-        if st.button("⬅️ Home"):
-            goto("HOME")
-        return
+        st.markdown("## 📝 Sessione in corso")
 
-    st.write(f"Totale casi disponibili: **{len(items)}**")
-    st.json(items[0])
-    if st.button("⬅️ Home"):
-        goto("HOME")
+        answered = sum(1 for r in rows if (r.get("chosen_option") or "").strip())
+        st.markdown(
+            f'<div class="badge">✅ <strong>Risposte date</strong>: {answered}/{len(rows)}</div>',
+            unsafe_allow_html=True
+        )
 
-def render_banca():
-    st.subheader("📚 Banca dati")
-    items = load_bank("BANCA")
-    if not items:
-        st.warning("Banca dati vuota. (Docente: carica da Area docente)")
-        if st.button("⬅️ Home"):
-            goto("HOME")
-        return
+        # Lettere "bold" compatibili con radio (no markdown)
+        BOLD_LETTER = {"A": "𝐀", "B": "𝐁", "C": "𝐂", "D": "𝐃"}
 
-    st.write(f"Totale elementi in banca dati: **{len(items)}**")
-    q = st.text_input("Cerca nel testo domanda", placeholder="Scrivi una parola chiave...")
-    filtered = items
-    if q.strip():
-        qq = q.strip().lower()
-        filtered = [x for x in items if qq in (x.get("domanda","").lower())]
+        for idx, row in enumerate(rows, start=1):
+            st.markdown(
+                f"""
+                <div class="quiz-card">
+                  <div class="quiz-title">Domanda n°{idx} di {len(rows)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-    st.write(f"Risultati: **{len(filtered)}**")
-    for it in filtered[:10]:
-        st.markdown(f"- {it.get('domanda','(senza testo)')}")
-    if len(filtered) > 10:
-        st.caption("Mostro solo i primi 10 risultati (demo).")
+            st.markdown(f"**{row['question_text']}**")
 
-    if st.button("⬅️ Home"):
-        goto("HOME")
+            options_map = {
+                "A": (row.get("option_a") or "").strip(),
+                "B": (row.get("option_b") or "").strip(),
+                "C": (row.get("option_c") or "").strip(),
+                "D": (row.get("option_d") or "").strip(),
+            }
 
-# ---------------------------
-# ROUTING
-# ---------------------------
-if st.session_state.page == "HOME":
-    render_home()
-elif st.session_state.page == "DOCENTE":
-    if not st.session_state.is_teacher:
-        st.error("Accesso negato: area docente.")
-        if st.button("⬅️ Home"):
-            goto("HOME")
-    else:
-        render_docente()
-elif st.session_state.page == "QUIZ":
-    render_quiz()
-elif st.session_state.page == "CASI":
-    render_casi()
-elif st.session_state.page == "BANCA":
-    render_banca()
-else:
-    goto("HOME")
+            letters = [k for k in ["A", "B", "C", "D"] if options_map[k] != ""]
+            radio_options = ["—"] + letters
+
+            def fmt(opt: str) -> str:
+                if opt == "—":
+                    return "— (lascia senza risposta)"
+                return f"{BOLD_LETTER.get(opt,opt)}) {options_map[opt]}"
+
+            current = (row.get("chosen_option") or "").strip().upper()
+            if current not in letters:
+                current = "—"
+
+            choice = st.radio(
+                "Seleziona risposta",
+                options=radio_options,
+                index=radio_options.index(current),
+                format_func=fmt,
+                key=f"q_{row['id']}",
+                disabled=time_up,
+            )
+
+            new_val = None if choice == "—" else choice
+            old_val = (row.get("chosen_option") or None)
+
+            if (not time_up) and (new_val != old_val):
+                try:
+                    update_chosen_option(row_id=row["id"], session_id=session_id, chosen_letter=new_val)
+                except Exception:
+                    pass
+
+            if new_val is None:
+                st.markdown(
+                    '<div class="status-pill warn">📝 <b>Stato risposta:</b> ⚠️ Non hai ancora risposto</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div class="status-pill ok">📝 <b>Stato risposta:</b> ✅ Risposta selezionata: <b>{new_val}</b></div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.divider()
+
+        st.markdown('<div class="end-btn-wrap">', unsafe_allow_html=True)
+        if st.button("Termina simulazione e vedi correzione"):
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = True
+            st.session_state["finished_ts"] = time.time()
+            finish_session(session_id)
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- RESULTS ----------
+    if st.session_state["show_results"]:
+        session_id = st.session_state["session_id"]
+        rows = fetch_session_questions(session_id)
+
+        score = 0
+        for row in rows:
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+            if chosen and chosen == correct:
+                score += 1
+
+        start_ts = st.session_state.get("started_ts")
+        end_ts2 = st.session_state.get("finished_ts") or time.time()
+        elapsed_sec = int(max(0, float(end_ts2) - float(start_ts))) if start_ts else 0
+        em = elapsed_sec // 60
+        es = elapsed_sec % 60
+
+        st.markdown("## ✅ Correzione finale")
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+        st.divider()
+
+        def letter_to_text(row: dict, letter: str) -> str:
+            letter = (letter or "").strip().upper()
+            if letter == "A":
+                return (row.get("option_a") or "").strip()
+            if letter == "B":
+                return (row.get("option_b") or "").strip()
+            if letter == "C":
+                return (row.get("option_c") or "").strip()
+            if letter == "D":
+                return (row.get("option_d") or "").strip()
+            return ""
+
+        for idx, row in enumerate(rows, start=1):
+            chosen = (row.get("chosen_option") or "").strip().upper()
+            correct = (row.get("correct_option") or "").strip().upper()
+
+            chosen_text = letter_to_text(row, chosen) if chosen else ""
+            correct_text = letter_to_text(row, correct)
+
+            ok = (chosen != "" and chosen == correct)
+
+            st.markdown(f"### Domanda n°{idx} {'✅' if ok else '❌'}")
+            st.markdown(f"**{row['question_text']}**")
+
+            if chosen:
+                st.write(f"**Tua risposta:** {chosen}) {chosen_text}")
+            else:
+                st.write("**Tua risposta:** — (non risposta)")
+
+            st.write(f"**Corretta:** {correct}) {correct_text}")
+
+            if row.get("explanation"):
+                st.caption(row["explanation"])
+
+            st.divider()
+
+        st.success(f"📌 Punteggio: **{score} / {len(rows)}**  •  ⏱️ Completata in **{em} min {es:02d} sec**")
+
+        if st.button("Torna al menu"):
+            st.session_state["session_id"] = None
+            st.session_state["in_progress"] = False
+            st.session_state["show_results"] = False
+            st.session_state["started_ts"] = None
+            st.session_state["finished_ts"] = None
+            st.session_state["duration_seconds"] = DURATION_SECONDS_DEFAULT
+            st.session_state["menu_page"] = "home"
+            st.rerun()
+
+# =========================================================
+# PADDING (non rimuovere nulla)
+# =========================================================
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
+# padding
