@@ -1,6 +1,8 @@
 import os
 import time
 import random
+import base64
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict
 
@@ -421,92 +423,89 @@ def render_header(total_questions: int):
 bank_count = fetch_bank_count()
 # render_header(bank_count)
 # ===============================
-# HERO / LANDING PAGE
+# HERO / LANDING PAGE (NUOVO)
 # ===============================
-components.html(
-    """
-    <style>
-        .hero-wrapper {
-            background: linear-gradient(135deg, #0b2c4d, #0f4c81);
-            padding: 48px 40px;
-            border-radius: 18px;
-            color: white;
-            margin-bottom: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.15);
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 18px;
-        }
-        .hero-title {
-            font-size: 42px;
-            font-weight: 800;
-            line-height: 1.15;
+def _img_to_base64(path: Path) -> str:
+    return base64.b64encode(path.read_bytes()).decode()
+
+_bg_path = Path("assets/bg.png")
+if _bg_path.exists():
+    _bg_b64 = _img_to_base64(_bg_path)
+
+    st.markdown(
+        f"""
+        <style>
+        /* background image */
+        .stApp {{
+            background: url("data:image/png;base64,{{_bg_b64}}") no-repeat center center fixed;
+            background-size: cover;
+        }}
+        /* overlay per leggibilità */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at top, rgba(0,0,0,0.32), rgba(0,0,0,0.12) 45%, rgba(0,0,0,0.34));
+            pointer-events: none;
+            z-index: 0;
+        }}
+        .block-container {{
+            position: relative;
+            z-index: 1;
+        }}
+
+        /* HERO */
+        .home-hero {{
+            text-align: center;
+            color: rgba(255,255,255,0.96);
+            text-shadow: 0 10px 30px rgba(0,0,0,0.45);
+            margin-top: 4px;
             margin-bottom: 14px;
-        }
-        .hero-sub {
-            font-size: 17px;
-            opacity: 0.92;
-            max-width: 900px;
-            margin-bottom: 34px;
-        }
-        .hero-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 18px;
-        }
-        .hero-card {
-            background: rgba(255,255,255,0.12);
-            border-radius: 14px;
-            padding: 18px;
-            font-size: 15px;
-            line-height: 1.4;
-            backdrop-filter: blur(6px);
-        }
-        .hero-card h4 {
-            margin: 0 0 6px 0;
+        }}
+        .home-pill {{
+            display:inline-flex;
+            align-items:center;
+            gap:10px;
+            padding: 9px 16px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.14);
+            border: 1px solid rgba(255,255,255,0.20);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-weight: 850;
+            letter-spacing: 0.35px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }}
+        .home-hero h1 {{
+            font-size: 44px;
+            line-height: 1.05;
+            margin: 0 0 8px 0;
+            font-weight: 950;
+            letter-spacing: 0.2px;
+        }}
+        .home-hero .sub {{
             font-size: 16px;
-            font-weight: 700;
-        }
-    </style>
+            font-weight: 900;
+            opacity: 0.98;
+            margin-top: 4px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.info("ℹ️ Per usare lo sfondo: crea la cartella 'assets' e inserisci il file 'bg.png' in 'assets/bg.png'.")
 
-    <div class="hero-wrapper">
-        <div class="hero-badge">🚓 Platform Corso PL</div>
-
-        <div class="hero-title">
-            Banca dati, simulazioni e quiz<br>
-            <span style="opacity:0.9;">Polizia Locale</span>
-        </div>
-
-        <div class="hero-sub">
-            Piattaforma didattica professionale per la preparazione ai concorsi
-            di Polizia Locale: simulazioni d’esame, banca dati normativa
-            e casi pratici commentati.
-        </div>
-
-        <div class="hero-cards">
-            <div class="hero-card">
-                <h4>📚 Banca dati</h4>
-                Normativa aggiornata e consultabile per lo studio.
-            </div>
-            <div class="hero-card">
-                <h4>📝 Simulazioni quiz</h4>
-                Prove d’esame realistiche con timer e correzione.
-            </div>
-            <div class="hero-card">
-                <h4>⚖️ Casi pratici</h4>
-                Applicazione concreta delle norme operative.
-            </div>
-        </div>
+st.markdown(
+    """
+    <div class="home-hero">
+      <div class="home-pill">🚓 <span>PIATTAFORMA • CORSO PL</span></div>
+      <h1>Banca dati, simulazioni e quiz</h1>
+      <div class="sub">Piattaforma didattica a cura di <b>Raffaele Sotero</b></div>
     </div>
     """,
-    height=420,
+    unsafe_allow_html=True
 )
 
 tab_stud, tab_doc = st.tabs(["🎓 Corsista", "🧑‍🏫 Docente (upload CSV)"])
